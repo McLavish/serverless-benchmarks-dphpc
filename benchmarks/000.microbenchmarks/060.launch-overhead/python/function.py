@@ -13,7 +13,7 @@ def initialize_torch(size, dtype=torch.float16, device="cuda"):
 def handler(event):
 
     size = event.get("size", 1000000)
-    #reps = event.get("reps", 1000)
+    # reps = event.get("reps", 1000)
     # total elements processed across all launches
     total_elems = 1e8
     reps = total_elems // size
