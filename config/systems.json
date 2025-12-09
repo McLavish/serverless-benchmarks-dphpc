@@ -34,9 +34,12 @@
         "deployment": {
           "files": [
             "storage.py",
-            "nosql.py"
+            "nosql.py",
+            "function_workflow.py"
           ],
-          "packages": [],
+          "packages": [
+            "redis"
+          ],
           "module_packages": {
             "nosql": [
               "boto3==1.28.3"
@@ -91,12 +94,15 @@
         ],
         "deployment": {
           "files": [
-            "handler.py",
+            "handler_function.py",
+            "handler_workflow.py",
             "storage.py",
             "nosql.py",
             "setup.py"
           ],
-          "packages": [],
+          "packages": [
+            "redis"
+          ],
           "module_packages": {}
         }
       },
@@ -144,11 +150,20 @@
         "username": "docker_user",
         "deployment": {
           "files": [
-            "handler.py",
+            "handler_function.py",
+            "main_workflow.py",
+            "handler_workflow.py",
             "storage.py",
+            "fsm.py",
+            "run_workflow.py",
+            "run_subworkflow.py",
             "nosql.py"
           ],
-          "packages": [],
+          "packages": [
+            "azure-functions",
+            "azure-functions-durable==1.1.6",
+            "redis"
+          ],
           "module_packages": {
             "storage": [
               "azure-storage-blob"
@@ -209,11 +224,14 @@
         "username": "docker_user",
         "deployment": {
           "files": [
-            "handler.py",
+            "handler_function.py",
+            "handler_workflow.py",
             "storage.py",
             "nosql.py"
           ],
-          "packages": [],
+          "packages": [
+            "redis"
+          ],
           "module_packages": {
             "storage": [
               "google-cloud-storage"

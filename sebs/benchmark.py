@@ -24,7 +24,11 @@ if TYPE_CHECKING:
 
 class BenchmarkConfig:
     def __init__(
-        self, timeout: int, memory: int, languages: List["Language"], modules: List[BenchmarkModule]
+        self,
+        timeout: int,
+        memory: int,
+        languages: List["Language"],
+        modules: List[BenchmarkModule],
     ):
         self._timeout = timeout
         self._memory = memory
@@ -261,6 +265,13 @@ class Benchmark(LoggingBase):
                 path = os.path.join(directory, f)
                 with open(path, "rb") as opened_file:
                     hash_sum.update(opened_file.read())
+
+        # workflow definition
+        definition_path = os.path.join(directory, os.path.pardir, "definition.json")
+        if os.path.exists(definition_path):
+            with open(definition_path, "rb") as opened_file:
+                hash_sum.update(opened_file.read())
+
         # wrappers
         wrappers = project_absolute_path(
             "benchmarks", "wrappers", deployment, language, WRAPPERS[language]
@@ -312,19 +323,23 @@ class Benchmark(LoggingBase):
             self._is_cached = False
             self._is_cached_valid = False
 
-    def copy_code(self, output_dir):
+    def get_code_files(self, include_config=True):
         FILES = {
-            "python": ["*.py", "requirements.txt*"],
-            "nodejs": ["*.js", "package.json"],
+            "python": ["*.py", "*.sh", "*.c", "*.h", "*.so", "*.so.*"],
+            "nodejs": ["*.js"],
         }
+        if include_config:
+            FILES["python"] += ["requirements.txt*", "*.json"]
+            FILES["nodejs"] += ["package.json", "*.json"]
+
         path = os.path.join(self.benchmark_path, self.language_name)
         for file_type in FILES[self.language_name]:
             for f in glob.glob(os.path.join(path, file_type)):
-                shutil.copy2(os.path.join(path, f), output_dir)
-        # support node.js benchmarks with language specific packages
-        nodejs_package_json = os.path.join(path, f"package.json.{self.language_version}")
-        if os.path.exists(nodejs_package_json):
-            shutil.copy2(nodejs_package_json, os.path.join(output_dir, "package.json"))
+                yield os.path.join(path, f)
+
+    def copy_code(self, output_dir: str):
+        for path in self.get_code_files():
+            shutil.copy2(path, output_dir)
 
     def add_benchmark_data(self, output_dir):
         cmd = "/bin/bash {benchmark_path}/init.sh {output_dir} false {architecture}"
@@ -345,7 +360,7 @@ class Benchmark(LoggingBase):
                     stderr=subprocess.STDOUT,
                 )
 
-    def add_deployment_files(self, output_dir):
+    def add_deployment_files(self, output_dir: str, is_workflow: bool):
         handlers_dir = project_absolute_path(
             "benchmarks", "wrappers", self._deployment_name, self.language_name
         )
@@ -357,6 +372,29 @@ class Benchmark(LoggingBase):
         ]
         for file in handlers:
             shutil.copy2(file, os.path.join(output_dir))
+
+        if self.language_name == "python":
+            handler_path = os.path.join(output_dir, "handler.py")
+            handler_function_path = os.path.join(output_dir, "handler_function.py")
+            handler_workflow_path = os.path.join(output_dir, "handler_workflow.py")
+            if is_workflow and os.path.exists(handler_workflow_path):
+                os.rename(handler_workflow_path, handler_path)
+                if os.path.exists(handler_function_path):
+                    os.remove(handler_function_path)
+            elif not is_workflow and os.path.exists(handler_function_path):
+                os.rename(handler_function_path, handler_path)
+                if os.path.exists(handler_workflow_path):
+                    os.remove(handler_workflow_path)
+
+            workflow_entry = os.path.join(output_dir, "function_workflow.py")
+            function_entry = os.path.join(output_dir, "function.py")
+            if os.path.exists(workflow_entry):
+                if is_workflow:
+                    if os.path.exists(function_entry):
+                        os.remove(function_entry)
+                    os.rename(workflow_entry, function_entry)
+                else:
+                    os.remove(workflow_entry)
 
     def add_deployment_package_python(self, output_dir):
 
@@ -370,16 +408,18 @@ class Benchmark(LoggingBase):
             packages = self._system_config.deployment_packages(
                 self._deployment_name, self.language_name
             )
+            out.write("\n")
             for package in packages:
-                out.write(package)
+                out.write(package + "\n")
 
             module_packages = self._system_config.deployment_module_packages(
                 self._deployment_name, self.language_name
             )
             for bench_module in self._benchmark_config.modules:
                 if bench_module.value in module_packages:
+                    out.write("\n")
                     for package in module_packages[bench_module.value]:
-                        out.write(package)
+                        out.write(package + "\n")
 
     def add_deployment_package_nodejs(self, output_dir):
         # modify package.json
@@ -580,9 +620,8 @@ class Benchmark(LoggingBase):
 
     def build(
         self,
-        deployment_build_step: Callable[
-            [str, str, str, str, str, bool, bool], Tuple[str, int, str]
-        ],
+        deployment_build_step: Callable[["Benchmark", str, bool, bool], Tuple[str, int, str]],
+        is_workflow: bool,
     ) -> Tuple[bool, str, bool, str]:
 
         # Skip build if files are up to date and user didn't enforce rebuild
@@ -591,7 +630,12 @@ class Benchmark(LoggingBase):
                 "Using cached benchmark {} at {}".format(self.benchmark, self.code_location)
             )
             if self.container_deployment:
-                return False, self.code_location, self.container_deployment, self.container_uri
+                return (
+                    False,
+                    self.code_location,
+                    self.container_deployment,
+                    self.container_uri,
+                )
 
             return False, self.code_location, self.container_deployment, ""
 
@@ -611,18 +655,15 @@ class Benchmark(LoggingBase):
 
         self.copy_code(self._output_dir)
         self.add_benchmark_data(self._output_dir)
-        self.add_deployment_files(self._output_dir)
+        self.add_deployment_files(self._output_dir, is_workflow)
         self.add_deployment_package(self._output_dir)
         self.install_dependencies(self._output_dir)
 
-        self._code_location, self._code_size, self._container_uri = deployment_build_step(
+        (self._code_location, self._code_size, self._container_uri,) = deployment_build_step(
+            self,
             os.path.abspath(self._output_dir),
-            self.language_name,
-            self.language_version,
-            self.architecture,
-            self.benchmark,
+            is_workflow,
             self.is_cached_valid,
-            self.container_deployment,
         )
         self.logging.info(
             (
@@ -642,7 +683,12 @@ class Benchmark(LoggingBase):
             self._cache_client.add_code_package(self._deployment_name, self)
         self.query_cache()
 
-        return True, self._code_location, self._container_deployment, self._container_uri
+        return (
+            True,
+            self._code_location,
+            self._container_deployment,
+            self._container_uri,
+        )
 
     """
         Locates benchmark input generator, inspect how many storage buckets
@@ -655,9 +701,11 @@ class Benchmark(LoggingBase):
     """
 
     def prepare_input(
-        self, system_resources: SystemResources, size: str, replace_existing: bool = False
+        self,
+        system_resources: SystemResources,
+        size: str,
+        replace_existing: bool = False,
     ):
-
         """
         Handle object storage buckets.
         """
@@ -684,7 +732,10 @@ class Benchmark(LoggingBase):
         if hasattr(self._benchmark_input_module, "allocate_nosql"):
 
             nosql_storage = system_resources.get_nosql_storage()
-            for name, table_properties in self._benchmark_input_module.allocate_nosql().items():
+            for (
+                name,
+                table_properties,
+            ) in self._benchmark_input_module.allocate_nosql().items():
                 nosql_storage.create_benchmark_tables(
                     self._benchmark,
                     name,
@@ -701,7 +752,13 @@ class Benchmark(LoggingBase):
         # storage.allocate_buckets(self.benchmark, buckets)
         # Get JSON and upload data as required by benchmark
         input_config = self._benchmark_input_module.generate_input(
-            self._benchmark_data_path, size, bucket, input, output, storage_func, nosql_func
+            self._benchmark_data_path,
+            size,
+            bucket,
+            input,
+            output,
+            storage_func,
+            nosql_func,
         )
 
         # Cache only once we data is in the cloud.
@@ -815,12 +872,12 @@ class BenchmarkModuleInterface:
         pass
 
 
-def load_benchmark_input(benchmark_path: str) -> BenchmarkModuleInterface:
+def load_benchmark_input(path: str) -> BenchmarkModuleInterface:
     # Look for input generator file in the directory containing benchmark
     import importlib.machinery
     import importlib.util
 
-    loader = importlib.machinery.SourceFileLoader("input", os.path.join(benchmark_path, "input.py"))
+    loader = importlib.machinery.SourceFileLoader("input", os.path.join(path, "input.py"))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec
     mod = importlib.util.module_from_spec(spec)

@@ -1,27 +1,34 @@
 import datetime
+import glob
 import json
 import re
 import os
 import shutil
 import time
 import uuid
-from typing import cast, Dict, List, Optional, Set, Tuple, Type  # noqa
+from typing import cast, Dict, List, Optional, Set, Tuple, Type, TypeVar  # noqa
 
 import docker
 
 from sebs.azure.blob_storage import BlobStorage
 from sebs.azure.cli import AzureCLI
 from sebs.azure.cosmosdb import CosmosDB
-from sebs.azure.function import AzureFunction
+from sebs.azure.function import AzureFunction, AzureWorkflow
 from sebs.azure.config import AzureConfig, AzureResources
 from sebs.azure.system_resources import AzureSystemResources
 from sebs.azure.triggers import AzureTrigger, HTTPTrigger
-from sebs.faas.function import Trigger
 from sebs.benchmark import Benchmark
 from sebs.cache import Cache
 from sebs.config import SeBSConfig
-from sebs.utils import LoggingHandlers, execute
-from sebs.faas.function import Function, FunctionConfig, ExecutionResult
+from sebs.utils import LoggingHandlers, execute, replace_string_in_file
+from sebs.faas.function import (
+    CloudBenchmark,
+    FunctionConfig,
+    Function,
+    ExecutionResult,
+    Workflow,
+    Trigger,
+)
 from sebs.faas.system import System
 from sebs.faas.config import Resources
 
@@ -46,6 +53,10 @@ class Azure(System):
     @staticmethod
     def function_type() -> Type[Function]:
         return AzureFunction
+
+    @staticmethod
+    def workflow_type() -> Type[Workflow]:
+        return AzureWorkflow
 
     @property
     def cli_instance(self) -> AzureCLI:
@@ -116,73 +127,188 @@ class Azure(System):
     # host.json
     # requirements.txt/package.json
     def package_code(
-        self,
-        directory: str,
-        language_name: str,
-        language_version: str,
-        architecture: str,
-        benchmark: str,
-        is_cached: bool,
-        container_deployment: bool,
+        self, code_package: Benchmark, directory: str, is_workflow: bool, is_cached: bool
     ) -> Tuple[str, int, str]:
 
         container_uri = ""
 
-        if container_deployment:
+        if code_package.container_deployment:
             raise NotImplementedError("Container Deployment is not supported in Azure")
 
         # In previous step we ran a Docker container which installed packages
         # Python packages are in .python_packages because this is expected by Azure
-        EXEC_FILES = {"python": "handler.py", "nodejs": "handler.js"}
+        FILES = {"python": "*.py", "nodejs": "*.js"}
         CONFIG_FILES = {
             "python": ["requirements.txt", ".python_packages"],
             "nodejs": ["package.json", "node_modules"],
         }
-        package_config = CONFIG_FILES[language_name]
-
-        handler_dir = os.path.join(directory, "handler")
-        os.makedirs(handler_dir)
-        # move all files to 'handler' except package config
-        for f in os.listdir(directory):
-            if f not in package_config:
-                source_file = os.path.join(directory, f)
-                shutil.move(source_file, handler_dir)
-
-        # generate function.json
-        # TODO: extension to other triggers than HTTP
-        default_function_json = {
-            "scriptFile": EXEC_FILES[language_name],
-            "bindings": [
-                {
-                    "authLevel": "anonymous",
-                    "type": "httpTrigger",
-                    "direction": "in",
-                    "name": "req",
-                    "methods": ["get", "post"],
-                },
-                {"type": "http", "direction": "out", "name": "$return"},
-            ],
+        WRAPPER_FILES = {
+            "python": ["handler.py", "storage.py", "nosql.py", "fsm.py"],
+            "nodejs": ["handler.js", "storage.js"],
         }
-        json_out = os.path.join(directory, "handler", "function.json")
-        json.dump(default_function_json, open(json_out, "w"), indent=2)
+        file_type = FILES[code_package.language_name]
+        package_config = CONFIG_FILES[code_package.language_name]
+        wrapper_files = WRAPPER_FILES[code_package.language_name]
+
+        print(directory)
+
+        if is_workflow:
+
+            main_path = os.path.join(directory, "main_workflow.py")
+            os.rename(main_path, os.path.join(directory, "main.py"))
+
+            # Make sure we have a valid workflow benchmark
+            src_path = os.path.join(code_package.benchmark_path, "definition.json")
+            if not os.path.exists(src_path):
+                raise ValueError(f"No workflow definition found in {directory}")
+
+            dst_path = os.path.join(directory, "definition.json")
+            shutil.copy2(src_path, dst_path)
+
+        else:
+            # Put function's resources inside a dedicated directory
+            os.mkdir(os.path.join(directory, "function"))
+            for path in os.listdir(directory):
+
+                if path in [
+                    "main_workflow.py",
+                    "run_workflow.py",
+                    "run_subworkflow",
+                    "fsm.py",
+                    ".python_packages",
+                ]:
+                    continue
+
+                shutil.move(os.path.join(directory, path), os.path.join(directory, "function"))
+
+            main_path = os.path.join(directory, "main_workflow.py")
+            os.remove(main_path)
+
+        # TODO: extension to other triggers than HTTP
+        main_bindings = [
+            {
+                "name": "req",
+                "type": "httpTrigger",
+                "direction": "in",
+                "authLevel": "anonymous",
+                "methods": ["get", "post"],
+            },
+            {"name": "starter", "type": "durableClient", "direction": "in"},
+            {"name": "$return", "type": "http", "direction": "out"},
+        ]
+        activity_bindings = [
+            {"name": "event", "type": "activityTrigger", "direction": "in"},
+        ]
+        orchestrator_bindings = [
+            {"name": "context", "type": "orchestrationTrigger", "direction": "in"}
+        ]
+
+        if is_workflow:
+            bindings = {
+                "main": main_bindings,
+                "run_workflow": orchestrator_bindings,
+                "run_subworkflow": orchestrator_bindings,
+            }
+        else:
+            bindings = {"function": main_bindings}
+
+        if is_workflow:
+            func_dirs = []
+            for file_path in glob.glob(os.path.join(directory, file_type)):
+                file = os.path.basename(file_path)
+                print("file: ", file)
+
+                if file in package_config or file in wrapper_files:
+                    continue
+
+                # move file directory/f.py to directory/f/f.py
+                name, ext = os.path.splitext(file)
+                func_dir = os.path.join(directory, name)
+                func_dirs.append(func_dir)
+
+                dst_file = os.path.join(func_dir, file)
+                src_file = os.path.join(directory, file)
+                os.makedirs(func_dir)
+                shutil.move(src_file, dst_file)
+
+                # generate function.json
+                script_file = file if (name in bindings and is_workflow) else "handler.py"
+                payload = {
+                    "bindings": bindings.get(name, activity_bindings),
+                    "scriptFile": script_file,
+                    "disabled": False,
+                }
+                dst_json = os.path.join(os.path.dirname(dst_file), "function.json")
+                json.dump(payload, open(dst_json, "w"), indent=2)
+
+            # copy every wrapper file to respective function dirs
+            for wrapper_file in wrapper_files:
+                src_path = os.path.join(directory, wrapper_file)
+                for func_dir in func_dirs:
+                    dst_path = os.path.join(func_dir, wrapper_file)
+                    shutil.copyfile(src_path, dst_path)
+                os.remove(src_path)
+
+            for func_dir in func_dirs:
+                handler_path = os.path.join(func_dir, WRAPPER_FILES[code_package.language_name][0])
+                if self.config.resources.redis_host is not None:
+                    replace_string_in_file(
+                        handler_path, "{{REDIS_HOST}}", f'"{self.config.resources.redis_host}"'
+                    )
+                if self.config.resources.redis_password is not None:
+                    replace_string_in_file(
+                        handler_path,
+                        "{{REDIS_PASSWORD}}",
+                        f'"{self.config.resources.redis_password}"',
+                    )
+            run_workflow_path = os.path.join(
+                os.path.join(directory, "run_workflow", "run_workflow.py")
+            )
+            if self.config.resources.redis_host is not None:
+                replace_string_in_file(
+                    run_workflow_path, "{{REDIS_HOST}}", f'"{self.config.resources.redis_host}"'
+                )
+            if self.config.resources.redis_password is not None:
+                replace_string_in_file(
+                    run_workflow_path,
+                    "{{REDIS_PASSWORD}}",
+                    f'"{self.config.resources.redis_password}"',
+                )
+
+        else:
+            # generate function.json
+            script_file = os.path.join("handler.py")
+            payload = {
+                "bindings": bindings["function"],
+                "scriptFile": script_file,
+                "disabled": False,
+            }
+            dst_json = os.path.join(directory, "function", "function.json")
+            # dst_json = os.path.join(directory, "function.json")
+            json.dump(payload, open(dst_json, "w"), indent=2)
 
         # generate host.json
-        default_host_json = {
+        host_json = {
             "version": "2.0",
             "extensionBundle": {
                 "id": "Microsoft.Azure.Functions.ExtensionBundle",
-                "version": "[4.0.0, 5.0.0)",
+                "version": "[2.*, 3.0.0)",
             },
+            # "extensions": {
+            #    "durableTask": {
+            #        "maxConcurrentActivityFunctions": 1,
+            #    }
+            # }
         }
-        json.dump(default_host_json, open(os.path.join(directory, "host.json"), "w"), indent=2)
+        json.dump(host_json, open(os.path.join(directory, "host.json"), "w"), indent=2)
 
         code_size = Benchmark.directory_size(directory)
-        execute("zip -qu -r9 {}.zip * .".format(benchmark), shell=True, cwd=directory)
+        execute("zip -qu -r9 {}.zip * .".format(code_package.benchmark), shell=True, cwd=directory)
         return directory, code_size, container_uri
 
     def publish_function(
         self,
-        function: Function,
+        function: CloudBenchmark,
         code_package: Benchmark,
         container_dest: str,
         repeat_on_failure: bool = False,
@@ -198,6 +324,7 @@ class Azure(System):
                         function.name, self.AZURE_RUNTIMES[code_package.language_name]
                     )
                 )
+
                 url = ""
                 for line in ret.split(b"\n"):
                     line = line.decode("utf-8")
@@ -216,7 +343,7 @@ class Azure(System):
 
                     resource_group = self.config.resources.resource_group(self.cli_instance)
                     ret = self.cli_instance.execute(
-                        "az functionapp function show --function-name handler "
+                        "az functionapp function show --function-name function "
                         f"--name {function.name} --resource-group {resource_group}"
                     )
                     try:
@@ -229,6 +356,7 @@ class Azure(System):
                 success = True
             except RuntimeError as e:
                 error = str(e)
+                print(error)
                 # app not found
                 # Azure changed the description as some point
                 if ("find app with name" in error or "NotFound" in error) and repeat_on_failure:
@@ -256,9 +384,9 @@ class Azure(System):
         :return: URL to reach HTTP-triggered function
     """
 
-    def update_function(
+    def update_benchmark(
         self,
-        function: Function,
+        function: CloudBenchmark,
         code_package: Benchmark,
         container_deployment: bool,
         container_uri: str,
@@ -293,8 +421,12 @@ class Azure(System):
             trigger.logging_handlers = self.logging_handlers
             function.add_trigger(trigger)
 
-    def update_envs(self, function: Function, code_package: Benchmark, env_variables: dict = {}):
-        envs = {}
+    def update_envs(
+        self, function: CloudBenchmark, code_package: Benchmark, env_variables: dict = {}
+    ):
+
+        envs = env_variables.copy()
+
         if code_package.uses_nosql:
 
             nosql_storage = cast(CosmosDB, self._system_resources.get_nosql_storage())
@@ -377,7 +509,7 @@ class Azure(System):
                 self.logging.error(e)
                 raise e
 
-    def update_function_configuration(self, function: Function, code_package: Benchmark):
+    def update_function_configuration(self, cached_function: Function, benchmark: Benchmark):
         # FIXME: this does nothing currently - we don't specify timeout
         self.logging.warning(
             "Updating function's memory and timeout configuration is not supported."
@@ -406,13 +538,12 @@ class Azure(System):
         )
         return func_name
 
-    def create_function(
-        self,
-        code_package: Benchmark,
-        func_name: str,
-        container_deployment: bool,
-        container_uri: str,
-    ) -> AzureFunction:
+    from sebs import azure
+    B = TypeVar("B", bound=azure.function.Function)
+
+    def create_benchmark(
+        self, code_package: Benchmark, func_name: str, benchmark_cls: Type[B], container_deployment: bool, container_uri: str
+    ) -> B:
 
         if container_deployment:
             raise NotImplementedError("Container deployment is not supported in Azure")
@@ -433,6 +564,7 @@ class Azure(System):
 
         # check if function does not exist
         # no API to verify existence
+        function_storage_account: AzureResources.Storage | None = None
         try:
             ret = self.cli_instance.execute(
                 (
@@ -449,6 +581,7 @@ class Azure(System):
                     function_storage_account = AzureResources.Storage.from_cache(
                         account_name, connection_string
                     )
+            assert function_storage_account is not None
             self.logging.info("Azure: Selected {} function app".format(func_name))
         except RuntimeError:
             function_storage_account = self.config.resources.add_storage_account(self.cli_instance)
@@ -459,11 +592,11 @@ class Azure(System):
                     # create function app
                     self.cli_instance.execute(
                         (
-                            " az functionapp create --resource-group {resource_group} "
-                            " --os-type Linux --consumption-plan-location {region} "
+                            " az functionapp create --functions-version 3 "
+                            " --resource-group {resource_group} --os-type Linux"
+                            " --consumption-plan-location {region} "
                             " --runtime {runtime} --runtime-version {runtime_version} "
                             " --name {func_name} --storage-account {storage_account}"
-                            " --functions-version 4 "
                         ).format(**config)
                     )
                     self.logging.info("Azure: Created function app {}".format(func_name))
@@ -477,7 +610,7 @@ class Azure(System):
                     # Rethrow -> another error
                     else:
                         raise
-        function = AzureFunction(
+        function = benchmark_cls(
             name=func_name,
             benchmark=code_package.benchmark,
             code_hash=code_package.hash,
@@ -486,23 +619,51 @@ class Azure(System):
         )
 
         # update existing function app
-        self.update_function(function, code_package, container_deployment, container_uri)
+        self.update_benchmark(function, code_package, container_deployment, container_uri)
 
-        self.cache_client.add_function(
+        self.cache_client.add_benchmark(
             deployment_name=self.name(),
             language_name=language,
             code_package=code_package,
-            function=function,
+            benchmark=function,
         )
         return function
 
-    def cached_function(self, function: Function):
+    def cached_benchmark(self, function: CloudBenchmark):
 
         data_storage_account = self.config.resources.data_storage_account(self.cli_instance)
         for trigger in function.triggers_all():
             azure_trigger = cast(AzureTrigger, trigger)
             azure_trigger.logging_handlers = self.logging_handlers
             azure_trigger.data_storage_account = data_storage_account
+
+    def create_function(self, code_package: Benchmark, func_name: str, container_deployment: bool, container_uri: str) -> AzureFunction:
+        return self.create_benchmark(code_package, func_name, AzureFunction, container_deployment, container_uri)
+
+    def update_function(self, function: Function, code_package: Benchmark, container_deployment: bool, container_uri: str):
+        self.update_benchmark(function, code_package, container_deployment, container_uri)
+
+    def create_workflow(self, code_package: Benchmark, workflow_name: str) -> AzureWorkflow:
+        return self.create_benchmark(code_package, workflow_name, AzureWorkflow, code_package.container_deployment, code_package.container_uri)
+
+    def update_workflow(self, workflow: Workflow, code_package: Benchmark):
+        # Azure does not support containers
+        self.update_benchmark(workflow, code_package, code_package.container_deployment, code_package.container_uri)
+
+    """
+        Prepare Azure resources to store experiment results.
+        Allocate one container.
+
+        :param benchmark: benchmark name
+        :return: name of bucket to store experiment results
+    """
+
+    def prepare_experiment(self, benchmark: str):
+
+        logs_container = self._system_resources.get_storage().add_output_bucket(
+            benchmark, suffix="logs"
+        )
+        return logs_container
 
     def download_metrics(
         self,
@@ -604,67 +765,12 @@ class Azure(System):
         It is automatically created for each function.
     """
 
-    def create_trigger(self, function: Function, trigger_type: Trigger.TriggerType) -> Trigger:
+    def create_function_trigger(
+        self, function: Function, trigger_type: Trigger.TriggerType
+    ) -> Trigger:
         raise NotImplementedError()
 
-
-#
-#    def create_azure_function(self, fname, config):
-#
-#        # create function name
-#        region = self.config["config"]["region"]
-#        # only hyphens are allowed
-#        # and name needs to be globally unique
-#        func_name = fname.replace(".", "-").replace("_", "-")
-#
-#        # create function app
-#        self.cli_instance.execute(
-#            (
-#                "az functionapp create --resource-group {} "
-#                "--os-type Linux --consumption-plan-location {} "
-#                "--runtime {} --runtime-version {} --name {} "
-#                "--storage-account {}"
-#            ).format(
-#                self.resource_group_name,
-#                region,
-#                self.AZURE_RUNTIMES[self.language],
-#                self.config["config"]["runtime"][self.language],
-#                func_name,
-#                self.storage_account_name,
-#            )
-#        )
-#        logging.info("Created function app {}".format(func_name))
-#        return func_name
-#
-#    init = False
-#
-#    def create_function_copies(
-#        self,
-#        function_names: List[str],
-#        code_package: Benchmark,
-#        experiment_config: dict,
-#    ):
-#
-#        if not self.init:
-#            code_location = code_package.code_location
-#            # package = self.package_code(code_location, code_package.benchmark)
-#            # code_size = code_package.code_size
-#            # Restart Docker instance to make sure code package is mounted
-#            self.start(code_location, restart=True)
-#            self.storage_account()
-#            self.resource_group()
-#            self.init = True
-#
-#        # names = []
-#        # for fname in function_names:
-#        #    names.append(self.create_azure_function(fname, experiment_config))
-#        names = function_names
-#
-#        # time.sleep(30)
-#        urls = []
-#        for fname in function_names:
-#            url = self.publish_function(fname, repeat_on_failure=True)
-#            urls.append(url)
-#            logging.info("Published function app {} with URL {}".format(fname, url))
-#
-#        return names, urls
+    def create_workflow_trigger(
+        self, workflow: Workflow, trigger_type: Trigger.TriggerType
+    ) -> Trigger:
+        raise NotImplementedError()

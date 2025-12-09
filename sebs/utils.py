@@ -10,6 +10,8 @@ import platform
 
 from typing import List, Optional
 
+from redis import Redis
+
 PROJECT_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)
 DOCKER_DIR = os.path.join(PROJECT_DIR, "dockerfiles")
 PACK_CODE_APP = "pack_code_{}.sh"
@@ -95,6 +97,83 @@ def configure_logging():
         for logger in loggers:
             if name.startswith(logger):
                 logging.getLogger(name).setLevel(logging.ERROR)
+
+
+def replace_string_in_file(path: str, from_str: str, to_str: str):
+    with open(path, "rt") as f:
+        data = f.read()
+
+    data = data.replace(from_str, to_str)
+
+    with open(path, "wt") as f:
+        f.write(data)
+
+
+def connect_to_redis_cache(host: str, password: str):
+    if ":" in host:
+        redis_host, redis_port = host.split(":", 1)
+        port = int(redis_port)
+    else:
+        redis_host = host
+        port = 6379
+
+    redis = Redis(
+        host=redis_host,
+        port=port,
+        decode_responses=True,
+        socket_keepalive=True,
+        socket_timeout=10,
+        socket_connect_timeout=10,
+        password=password,
+    )
+    redis.ping()
+
+    return redis
+
+
+def download_measurements(
+    redis: Redis,
+    workflow_name: str,
+    after: float,
+    request_id: Optional[str],
+    **static_args,
+):
+    payloads = []
+    pattern = f"{workflow_name}/*/{request_id}/*" if request_id else f"{workflow_name}/*"
+
+    # This connection can timeout under certain network conditions.
+    # We might want to put it inside try/catch
+    for key in redis.scan_iter(match=pattern):
+        wname, fname, request_id, invoc_id = key.split("/")
+        assert wname == workflow_name
+
+        payload = redis.get(key)
+        redis.delete(key)
+
+        if payload:
+            try:
+                payload = json.loads(payload)
+
+                # make sure only measurements from our benchmark are saved
+                if payload["start"] > after:
+                    if "result" in payload:
+                        res = payload["result"]
+                        if isinstance(res, dict):
+                            del payload["result"]
+                            for key, val in res.items():
+                                payload["result." + key] = val
+
+                    payload["request_id"] = request_id
+                    payload = {**payload, **static_args}
+                    payloads.append(payload)
+            except json.decoder.JSONDecodeError:
+                print(f"Failed to decode payload: {payload}")
+
+    if len(payloads) == 0:
+        # FIXME: logging error
+        raise RuntimeError(f"Couldn't find measurements in Redis for {request_id}")
+
+    return payloads
 
 
 # def configure_logging(verbose: bool = False, output_dir: Optional[str] = None):

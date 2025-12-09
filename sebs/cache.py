@@ -12,7 +12,7 @@ from sebs.utils import LoggingBase, serialize
 
 if TYPE_CHECKING:
     from sebs.benchmark import Benchmark
-    from sebs.faas.function import Function
+    from sebs.faas.function import CloudBenchmark, Workflow
 
 
 def update(d, u):
@@ -350,6 +350,7 @@ class Cache(LoggingBase):
             )
 
             if os.path.exists(cached_dir):
+
                 # copy code
                 if os.path.isdir(code_package.code_location):
                     cached_location = os.path.join(cached_dir, "code")
@@ -403,12 +404,12 @@ class Cache(LoggingBase):
         :param storage_config: Configuration of storage buckets.
     """
 
-    def add_function(
+    def add_benchmark(
         self,
         deployment_name: str,
         language_name: str,
         code_package: "Benchmark",
-        function: "Function",
+        benchmark: "CloudBenchmark",
     ):
         if self.ignore_functions:
             return
@@ -418,10 +419,12 @@ class Cache(LoggingBase):
             cache_config = os.path.join(benchmark_dir, "config.json")
 
             if os.path.exists(cache_config):
-                functions_config: Dict[str, Any] = {function.name: {**function.serialize()}}
+                #TODO add code_package here under benchmark.name. 
+                functions_config: Dict[str, Any] = {benchmark.name: {**benchmark.serialize()}}
 
                 with open(cache_config, "r") as fp:
                     cached_config = json.load(fp)
+                    functions_config[benchmark.name]["code_package"] = cached_config[deployment_name][language]["code_package"]
                     if "functions" not in cached_config[deployment_name][language]:
                         cached_config[deployment_name][language]["functions"] = functions_config
                     else:
@@ -433,14 +436,23 @@ class Cache(LoggingBase):
                     fp.write(serialize(config))
             else:
                 raise RuntimeError(
-                    "Can't cache function {} for a non-existing code package!".format(function.name)
+                    "Can't cache function {} for a non-existing code package!".format(
+                        benchmark.name
+                    )
                 )
 
-    def update_function(self, function: "Function"):
+    def update_benchmark(self, benchmark: "CloudBenchmark"):
         if self.ignore_functions:
             return
         with self._lock:
-            benchmark_dir = os.path.join(self.cache_dir, function.benchmark)
+            #print("cache_dir: ", self.cache_dir, "benchmark: ", benchmark.serialize(), "benchmark.benchmark:", benchmark.benchmark)
+            #if isinstance(benchmark, Workflow):
+            #FIXME will break for functions. 
+            #print("benchmark name: ", benchmark.functions[0].benchmark)
+            if hasattr(benchmark, "functions"):
+                benchmark_dir = os.path.join(self.cache_dir, benchmark.functions[0].benchmark)
+            else:
+                benchmark_dir = os.path.join(self.cache_dir, benchmark.benchmark)
             cache_config = os.path.join(benchmark_dir, "config.json")
 
             if os.path.exists(cache_config):
@@ -451,13 +463,16 @@ class Cache(LoggingBase):
                             if "functions" not in cfg2:
                                 continue
                             for name, func in cfg2["functions"].items():
-                                if name == function.name:
+                                if name == benchmark.name:
                                     cached_config[deployment][language]["functions"][
                                         name
-                                    ] = function.serialize()
+                                    ] = benchmark.serialize()
+                                    cached_config[deployment][language]["functions"][name]["code_package"] = cached_config[deployment][language]["code_package"]
                 with open(cache_config, "w") as fp:
                     fp.write(serialize(cached_config))
             else:
                 raise RuntimeError(
-                    "Can't cache function {} for a non-existing code package!".format(function.name)
+                    "Can't cache function {} for a non-existing code package!".format(
+                        benchmark.name
+                    )
                 )

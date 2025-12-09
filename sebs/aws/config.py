@@ -156,16 +156,20 @@ class AWSResources(Resources):
                 "Version": "2012-10-17",
                 "Statement": [
                     {
+                        "Sid": "",
                         "Effect": "Allow",
-                        "Principal": {"Service": "lambda.amazonaws.com"},
+                        "Principal": {"Service": ["lambda.amazonaws.com", "states.amazonaws.com"]},
                         "Action": "sts:AssumeRole",
                     }
                 ],
             }
-            role_name = "sebs-lambda-role"
+            role_name = "sebs-role"
             attached_policies = [
                 "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+                "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
                 "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                "arn:aws:iam::aws:policy/service-role/AWSLambdaRole",
+                "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess",
             ]
             try:
                 out = iam_client.get_role(RoleName=role_name)
@@ -326,6 +330,7 @@ class AWSResources(Resources):
         return out
 
     def update_cache(self, cache: Cache):
+        super().update_cache_redis(keys=["aws", "resources"], cache=cache)
         super().update_cache(cache)
         cache.update_config(
             val=self.docker_registry, keys=["aws", "resources", "docker", "registry"]
@@ -348,12 +353,14 @@ class AWSResources(Resources):
         # Load cached values
         if cached_config and "resources" in cached_config:
             AWSResources.initialize(ret, cached_config["resources"])
+            ret.load_redis(cached_config["resources"])
             ret.logging_handlers = handlers
             ret.logging.info("Using cached resources for AWS")
         else:
             # Check for new config
             if "resources" in config:
                 AWSResources.initialize(ret, config["resources"])
+                ret.load_redis(config["resources"])
                 ret.logging_handlers = handlers
                 ret.logging.info("No cached resources for AWS found, using user configuration.")
             else:
@@ -395,6 +402,7 @@ class AWSConfig(Config):
         # FIXME: use future annotations (see sebs/faas/system)
         credentials = cast(AWSCredentials, AWSCredentials.deserialize(config, cache, handlers))
         resources = cast(AWSResources, AWSResources.deserialize(config, cache, handlers))
+
         config_obj = AWSConfig(credentials, resources)
         config_obj.logging_handlers = handlers
         # Load cached values

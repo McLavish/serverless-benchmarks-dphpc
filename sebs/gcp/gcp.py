@@ -16,14 +16,18 @@ import google.cloud.monitoring_v3 as monitoring_v3
 from sebs.cache import Cache
 from sebs.config import SeBSConfig
 from sebs.benchmark import Benchmark
-from sebs.faas.function import Function, FunctionConfig, Trigger
+from sebs.faas.function import CloudBenchmark, Function, FunctionConfig, Trigger, Workflow
 from sebs.faas.config import Resources
 from sebs.faas.system import System
 from sebs.gcp.config import GCPConfig
 from sebs.gcp.resources import GCPSystemResources
 from sebs.gcp.storage import GCPStorage
 from sebs.gcp.function import GCPFunction
-from sebs.utils import LoggingHandlers
+from sebs.gcp.workflow import GCPWorkflow
+from sebs.gcp.generator import GCPGenerator
+from sebs.utils import LoggingHandlers, replace_string_in_file
+
+import json
 
 """
     This class provides basic abstractions for the FaaS system.
@@ -70,6 +74,10 @@ class GCP(System):
     def function_type() -> "Type[Function]":
         return GCPFunction
 
+    @staticmethod
+    def workflow_type() -> "Type[Workflow]":
+        return GCPWorkflow
+
     """
         Initialize the system. After the call the local or remote
         FaaS system should be ready to allocate functions, manage
@@ -80,10 +88,14 @@ class GCP(System):
 
     def initialize(self, config: Dict[str, str] = {}, resource_prefix: Optional[str] = None):
         self.function_client = build("cloudfunctions", "v1", cache_discovery=False)
+        self.workflow_client = build("workflows", "v1", cache_discovery=False)
         self.initialize_resources(select_prefix=resource_prefix)
 
     def get_function_client(self):
         return self.function_client
+
+    def get_workflow_client(self):
+        return self.workflow_client
 
     def default_function_name(
         self, code_package: Benchmark, resources: Optional[Resources] = None
@@ -122,19 +134,12 @@ class GCP(System):
     """
 
     def package_code(
-        self,
-        directory: str,
-        language_name: str,
-        language_version: str,
-        architecture: str,
-        benchmark: str,
-        is_cached: bool,
-        container_deployment: bool,
+        self, code_package: Benchmark, directory: str, is_workflow: bool, is_cached: bool
     ) -> Tuple[str, int, str]:
 
         container_uri = ""
 
-        if container_deployment:
+        if code_package.container_deployment:
             raise NotImplementedError("Container Deployment is not supported in GCP")
 
         CONFIG_FILES = {
@@ -145,7 +150,8 @@ class GCP(System):
             "python": ("handler.py", "main.py"),
             "nodejs": ("handler.js", "index.js"),
         }
-        package_config = CONFIG_FILES[language_name]
+        package_config = CONFIG_FILES[code_package.language_name]
+
         function_dir = os.path.join(directory, "function")
         os.makedirs(function_dir)
         for file in os.listdir(directory):
@@ -154,10 +160,19 @@ class GCP(System):
                 shutil.move(file, function_dir)
 
         # rename handler function.py since in gcp it has to be caled main.py
-        old_name, new_name = HANDLER[language_name]
+        old_name, new_name = HANDLER[code_package.language_name]
         old_path = os.path.join(directory, old_name)
         new_path = os.path.join(directory, new_name)
         shutil.move(old_path, new_path)
+
+        if self.config.resources.redis_host is not None:
+            replace_string_in_file(
+                new_path, "{{REDIS_HOST}}", f'"{self.config.resources.redis_host}"'
+            )
+        if self.config.resources.redis_password is not None:
+            replace_string_in_file(
+                new_path, "{{REDIS_PASSWORD}}", f'"{self.config.resources.redis_password}"'
+            )
 
         """
             zip the whole directory (the zip-file gets uploaded to gcp later)
@@ -170,7 +185,7 @@ class GCP(System):
             which leads to a "race condition" when running several benchmarks
             in parallel, since a change of the current directory is NOT Thread specfic.
         """
-        benchmark_archive = "{}.zip".format(os.path.join(directory, benchmark))
+        benchmark_archive = "{}.zip".format(os.path.join(directory, code_package.benchmark))
         GCP.recursive_zip(directory, benchmark_archive)
         logging.info("Created {} archive".format(benchmark_archive))
 
@@ -181,7 +196,7 @@ class GCP(System):
         # rename the main.py back to handler.py
         shutil.move(new_path, old_path)
 
-        return os.path.join(directory, "{}.zip".format(benchmark)), bytes_size, container_uri
+        return os.path.join(directory, "{}.zip".format(code_package.benchmark)), bytes_size, container_uri
 
     def create_function(
         self,
@@ -216,21 +231,20 @@ class GCP(System):
 
         full_func_name = GCP.get_full_function_name(project_name, location, func_name)
         get_req = self.function_client.projects().locations().functions().get(name=full_func_name)
-
         try:
             get_req.execute()
         except HttpError:
 
             envs = self._generate_function_envs(code_package)
+            # FIXME: why is that needed?
+            envs["MY_FUNCTION_NAME"] = func_name
 
             create_req = (
                 self.function_client.projects()
                 .locations()
                 .functions()
                 .create(
-                    location="projects/{project_name}/locations/{location}".format(
-                        project_name=project_name, location=location
-                    ),
+                    location=GCP.get_location(project_name, location),
                     body={
                         "name": full_func_name,
                         "entryPoint": "handler",
@@ -246,6 +260,7 @@ class GCP(System):
             )
             create_req.execute()
             self.logging.info(f"Function {func_name} has been created!")
+            time.sleep(5)
 
             allow_unauthenticated_req = (
                 self.function_client.projects()
@@ -301,19 +316,20 @@ class GCP(System):
             )
             self.update_function(function, code_package, container_deployment, container_uri)
 
-        # Add LibraryTrigger to a new function
-        from sebs.gcp.triggers import LibraryTrigger
+        # Add LibraryFunctionTrigger to a new function
+        from sebs.gcp.triggers import FunctionLibraryTrigger
 
-        trigger = LibraryTrigger(func_name, self)
+        trigger = FunctionLibraryTrigger(func_name, self)
         trigger.logging_handlers = self.logging_handlers
         function.add_trigger(trigger)
 
         return function
 
-    def create_trigger(self, function: Function, trigger_type: Trigger.TriggerType) -> Trigger:
-        from sebs.gcp.triggers import HTTPTrigger
-
+    def create_function_trigger(
+        self, function: Function, trigger_type: Trigger.TriggerType
+    ) -> Trigger:
         if trigger_type == Trigger.TriggerType.HTTP:
+            from sebs.gcp.triggers import HTTPTrigger
 
             location = self.config.region
             project_name = self.config.project_name
@@ -322,6 +338,7 @@ class GCP(System):
             our_function_req = (
                 self.function_client.projects().locations().functions().get(name=full_func_name)
             )
+
             deployed = False
             begin = time.time()
             while not deployed:
@@ -342,10 +359,10 @@ class GCP(System):
 
         trigger.logging_handlers = self.logging_handlers
         function.add_trigger(trigger)
-        self.cache_client.update_function(function)
+        self.cache_client.update_benchmark(function)
         return trigger
 
-    def cached_function(self, function: Function):
+    def cached_benchmark(self, function: CloudBenchmark):
 
         from sebs.faas.function import Trigger
         from sebs.gcp.triggers import LibraryTrigger
@@ -379,6 +396,7 @@ class GCP(System):
         storage.upload(bucket, code_package.code_location, code_package_name)
 
         envs = self._generate_function_envs(code_package)
+        envs["MY_FUNCTION_NAME"] = function.name
 
         self.logging.info(f"Uploaded new code package to {bucket}/{code_package_name}")
         full_func_name = GCP.get_full_function_name(
@@ -527,6 +545,196 @@ class GCP(System):
     def get_full_function_name(project_name: str, location: str, func_name: str):
         return f"projects/{project_name}/locations/{location}/functions/{func_name}"
 
+    def create_workflow(self, code_package: Benchmark, workflow_name: str) -> "GCPWorkflow":
+        from sebs.gcp.triggers import HTTPTrigger
+
+        benchmark = code_package.benchmark
+        code_bucket: Optional[str] = None
+        location = self.config.region
+        project_name = self.config.project_name
+        function_cfg = FunctionConfig.from_benchmark(code_package)
+
+        # Make sure we have a valid workflow benchmark
+        definition_path = os.path.join(code_package.benchmark_path, "definition.json")
+        if not os.path.exists(definition_path):
+            raise ValueError(f"No workflow definition found for {workflow_name}")
+
+        # First we create a function for each code file
+        prefix = workflow_name + "___"
+        code_files = list(code_package.get_code_files(include_config=False))
+        func_names = [os.path.splitext(os.path.basename(p))[0] for p in code_files]
+        funcs = [self.create_function(code_package, prefix + fn) for fn in func_names]
+
+        # generate workflow definition.json
+        triggers = [self.create_function_trigger(f, Trigger.TriggerType.HTTP) for f in funcs]
+        urls = [cast(HTTPTrigger, t).url for t in triggers]
+        func_triggers = {n: u for (n, u) in zip(func_names, urls)}
+
+        gen = GCPGenerator(workflow_name, func_triggers)
+        gen.parse(definition_path)
+        definition = gen.generate()
+
+        # map functions require their own workflows
+        parent = GCP.get_location(project_name, location)
+        for map_id, map_def in gen.generate_maps():
+            full_workflow_name = GCP.get_full_workflow_name(project_name, location, map_id)
+            create_req = (
+                self.workflow_client.projects()  # type: ignore
+                .locations()
+                .workflows()
+                .create(
+                    parent=parent,
+                    workflowId=map_id,
+                    body={
+                        "name": full_workflow_name,
+                        "sourceContents": map_def,
+                    },
+                )
+            )
+            create_req.execute()
+            self.logging.info(f"Map workflow {map_id} has been created!")
+
+        full_workflow_name = GCP.get_full_workflow_name(project_name, location, workflow_name)
+        get_req = (
+            self.workflow_client.projects()  # type: ignore
+            .locations()
+            .workflows()
+            .get(name=full_workflow_name)
+        )
+
+        try:
+            get_req.execute()
+        except HttpError:
+            create_req = (
+                self.workflow_client.projects()  # type: ignore
+                .locations()
+                .workflows()
+                .create(
+                    parent=parent,
+                    workflowId=workflow_name,
+                    body={
+                        "name": full_workflow_name,
+                        "sourceContents": definition,
+                    },
+                )
+            )
+            create_req.execute()
+            self.logging.info(f"Workflow {workflow_name} has been created!")
+
+            workflow = GCPWorkflow(
+                workflow_name,
+                funcs,
+                benchmark,
+                code_package.hash,
+                function_cfg,
+                code_bucket,
+            )
+        else:
+            # if result is not empty, then function does exists
+            self.logging.info(
+                "Workflow {} exists on GCP, update the instance.".format(workflow_name)
+            )
+
+            workflow = GCPWorkflow(
+                name=workflow_name,
+                functions=funcs,
+                benchmark=benchmark,
+                code_package_hash=code_package.hash,
+                cfg=function_cfg,
+                bucket=code_bucket,
+            )
+            self.update_workflow(workflow, code_package)
+
+        # Add LibraryTrigger to a new function
+        from sebs.gcp.triggers import WorkflowLibraryTrigger
+
+        trigger = WorkflowLibraryTrigger(workflow_name, self)
+        trigger.logging_handlers = self.logging_handlers
+        workflow.add_trigger(trigger)
+
+        return workflow
+
+    def create_workflow_trigger(
+        self, workflow: Workflow, trigger_type: Trigger.TriggerType
+    ) -> Trigger:
+        from sebs.gcp.triggers import WorkflowLibraryTrigger
+
+        if trigger_type == Trigger.TriggerType.HTTP:
+            raise NotImplementedError("Cannot create http triggers for workflows.")
+        else:
+            trigger = WorkflowLibraryTrigger(workflow.name, self)
+
+        trigger.logging_handlers = self.logging_handlers
+        workflow.add_trigger(trigger)
+        self.cache_client.update_benchmark(workflow)
+        return trigger
+
+    def update_workflow(self, workflow: Workflow, code_package: Benchmark):
+        from sebs.gcp.triggers import HTTPTrigger
+
+        workflow = cast(GCPWorkflow, workflow)
+
+        # Make sure we have a valid workflow benchmark
+        definition_path = os.path.join(code_package.benchmark_path, "definition.json")
+        if not os.path.exists(definition_path):
+            raise ValueError(f"No workflow definition found for {workflow.name}")
+
+        # First we create a function for each code file
+        prefix = workflow.name + "___"
+        code_files = list(code_package.get_code_files(include_config=False))
+        func_names = [os.path.splitext(os.path.basename(p))[0] for p in code_files]
+        # FIXME: does it really resolve the problem of caching?
+        # funcs = [self.create_function(code_package, prefix + fn) for fn in func_names]
+        funcs = [self.get_function(code_package, prefix + fn) for fn in func_names]
+
+        # Generate workflow definition.json
+        triggers = [self.create_function_trigger(f, Trigger.TriggerType.HTTP) for f in funcs]
+        urls = [cast(HTTPTrigger, t).url for t in triggers]
+        func_triggers = {n: u for (n, u) in zip(func_names, urls)}
+        gen = GCPGenerator(workflow.name, func_triggers)
+        gen.parse(definition_path)
+        definition = gen.generate()
+
+        for map_id, map_def in gen.generate_maps():
+            full_workflow_name = GCP.get_full_workflow_name(
+                self.config.project_name, self.config.region, map_id
+            )
+            patch_req = (
+                self.workflow_client.projects()  # type: ignore
+                .locations()
+                .workflows()
+                .patch(
+                    name=full_workflow_name,
+                    body={
+                        "name": full_workflow_name,
+                        "sourceContents": map_def,
+                    },
+                )
+            )
+            patch_req.execute()
+            self.logging.info("Published new map workflow code.")
+
+        full_workflow_name = GCP.get_full_workflow_name(
+            self.config.project_name, self.config.region, workflow.name
+        )
+        req = (
+            self.workflow_client.projects()  # type: ignore
+            .locations()
+            .workflows()
+            .patch(
+                name=full_workflow_name,
+                body={"name": full_workflow_name, "sourceContents": definition},
+            )
+        )
+        # FIXME: wait for success!
+        res = req.execute()
+        workflow.functions = funcs
+        self.logging.info("Published new workflow code and configuration.")
+
+    @staticmethod
+    def get_full_workflow_name(project_name: str, location: str, workflow_name: str):
+        return f"projects/{project_name}/locations/{location}/workflows/{workflow_name}"
+
     def prepare_experiment(self, benchmark):
         logs_bucket = self._system_resources.get_storage().add_output_bucket(
             benchmark, suffix="logs"
@@ -657,9 +865,12 @@ class GCP(System):
 
     def _enforce_cold_start(self, function: Function, code_package: Benchmark):
 
+        ## FIXME: why is MY_FUNCTION_NAME that needed?
         self.cold_start_counter += 1
         new_version = self.update_function_configuration(
-            function, code_package, {"cold_start": str(self.cold_start_counter)}
+            function,
+            code_package,
+            {"cold_start": str(self.cold_start_counter), "MY_FUNCTION_NAME": function.name},
         )
 
         return new_version
@@ -735,6 +946,10 @@ class GCP(System):
         status_req = function_client.projects().locations().functions().get(name=name)
         status_res = status_req.execute()
         return int(status_res["versionId"])
+
+    @staticmethod
+    def get_location(project_name: str, location: str) -> str:
+        return f"projects/{project_name}/locations/{location}"
 
     # @abstractmethod
     # def get_invocation_error(self, function_name: str,

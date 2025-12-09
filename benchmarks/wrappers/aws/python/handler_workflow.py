@@ -1,0 +1,85 @@
+import datetime
+import json
+import os
+import sys
+import uuid
+import importlib
+
+REDIS_HOST = os.getenv("REDIS_HOST", "{{REDIS_HOST}}")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "{{REDIS_PASSWORD}}")
+
+
+def probe_cold_start():
+    is_cold = False
+    fname = os.path.join("/tmp", "cold_run")
+    if not os.path.exists(fname):
+        is_cold = True
+        container_id = str(uuid.uuid4())[0:8]
+        with open(fname, "a") as f:
+            f.write(container_id)
+    else:
+        with open(fname, "r") as f:
+            container_id = f.read()
+
+    return is_cold, container_id
+
+
+def handler(event, context):
+    # Add current directory to allow location of packages
+    sys.path.append(os.path.join(os.path.dirname(__file__), ".python_packages/lib/site-packages"))
+    from redis import Redis
+
+    start = datetime.datetime.now().timestamp()
+    os.environ["STORAGE_UPLOAD_BYTES"] = "0"
+    os.environ["STORAGE_DOWNLOAD_BYTES"] = "0"
+
+    req_id = context.aws_request_id
+    # FIXME : distinguish func and workflow req id!
+    event["payload"]["request-id"] = req_id
+    # FIXME: sort out passing payload
+    # we should support both payload and error
+    # without potentially overwriting user data
+
+    workflow_name, func_name = context.function_name.split("___")
+    function = importlib.import_module(f"function.{func_name}")
+    res = function.handler(event["payload"])
+
+    end = datetime.datetime.now().timestamp()
+
+    is_cold, container_id = probe_cold_start()
+    payload = {
+        "func": func_name,
+        "start": start,
+        "end": end,
+        "is_cold": is_cold,
+        "container_id": container_id,
+        "provider.request_id": context.aws_request_id,
+    }
+
+    func_res = os.getenv("SEBS_FUNCTION_RESULT")
+    if func_res:
+        payload["result"] = json.loads(func_res)
+
+    bytes_upload = os.getenv("STORAGE_UPLOAD_BYTES", 0)
+    if bytes_upload:
+        payload["blob.upload"] = int(bytes_upload)
+
+    bytes_download = os.getenv("STORAGE_DOWNLOAD_BYTES", 0)
+    if bytes_download:
+        payload["blob.download"] = int(bytes_download)
+
+    payload = json.dumps(payload)
+
+    redis = Redis(
+        host=REDIS_HOST,
+        port=6379,
+        decode_responses=True,
+        socket_connect_timeout=10,
+        password=REDIS_PASSWORD or None,
+    )
+
+    req_id = event["request_id"]
+    key = os.path.join(workflow_name, func_name, req_id, str(uuid.uuid4())[0:8])
+    redis.set(key, payload)
+
+    return res

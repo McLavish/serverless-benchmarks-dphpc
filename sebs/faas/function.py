@@ -9,6 +9,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Type, TypeVar  # noqa
 
+from google.cloud.workflows import executions_v1
+from google.cloud.workflows.executions_v1 import Execution
+from google.cloud.workflows.executions_v1.types import executions
+
+# from google.cloud.workflows.executions_v1beta.types import Execution
 from sebs.benchmark import Benchmark
 from sebs.utils import LoggingBase
 
@@ -154,6 +159,12 @@ class ExecutionResult:
             / timedelta(microseconds=1)
         )
 
+    def parse_benchmark_execution(self, execution: Execution):
+        self.output = json.loads(execution.result)
+        self.times.benchmark = int(
+            (execution.start_time - execution.end_time) / timedelta(microseconds=1)
+        )
+
     @staticmethod
     def deserialize(cached_config: dict) -> "ExecutionResult":
         ret = ExecutionResult()
@@ -202,21 +213,27 @@ class Trigger(ABC, LoggingBase):
         c.setopt(pycurl.WRITEFUNCTION, data.write)
 
         c.setopt(pycurl.POSTFIELDS, json.dumps(payload))
+
         begin = datetime.now()
         c.perform()
         end = datetime.now()
+
         status_code = c.getinfo(pycurl.RESPONSE_CODE)
         conn_time = c.getinfo(pycurl.PRETRANSFER_TIME)
         receive_time = c.getinfo(pycurl.STARTTRANSFER_TIME)
 
+        if status_code != 200:
+            self.logging.error(
+                "Invocation on URL {} failed with status code {}!".format(url, status_code)
+            )
+            if len(data.getvalue()) > 0:
+                self.logging.error("Output: {}".format(data.getvalue().decode()))
+            else:
+                self.logging.error("No output provided!")
+            raise RuntimeError(f"Failed invocation of function! Output: {data.getvalue().decode()}")
+
         try:
             output = json.loads(data.getvalue())
-
-            if status_code != 200:
-                self.logging.error("Invocation on URL {} failed!".format(url))
-                self.logging.error("Output: {}".format(output))
-                raise RuntimeError(f"Failed invocation of function! Output: {output}")
-
             self.logging.debug("Invoke of function was successful")
             result = ExecutionResult.from_times(begin, end)
             result.times.http_startup = conn_time
@@ -229,7 +246,9 @@ class Trigger(ABC, LoggingBase):
             result.parse_benchmark_output(output)
             return result
         except json.decoder.JSONDecodeError:
-            self.logging.error("Invocation on URL {} failed!".format(url))
+            self.logging.error(
+                "Invocation on URL {} failed with status code {}!".format(url, status_code)
+            )
             if len(data.getvalue()) > 0:
                 self.logging.error("Output: {}".format(data.getvalue().decode()))
             else:
@@ -254,9 +273,9 @@ class Trigger(ABC, LoggingBase):
     def serialize(self) -> dict:
         pass
 
-    @staticmethod
+    @classmethod
     @abstractmethod
-    def deserialize(cached_config: dict) -> "Trigger":
+    def deserialize(cls, cached_config: dict) -> "Trigger":
         pass
 
 
@@ -347,7 +366,7 @@ class FunctionConfig:
 """
 
 
-class Function(LoggingBase):
+class CloudBenchmark(LoggingBase):
     def __init__(self, benchmark: str, name: str, code_hash: str, cfg: FunctionConfig):
         super().__init__()
         self._benchmark = benchmark
@@ -413,5 +432,19 @@ class Function(LoggingBase):
 
     @staticmethod
     @abstractmethod
+    def deserialize(cached_config: dict) -> "CloudBenchmark":
+        pass
+
+
+class Function(CloudBenchmark):
+    @staticmethod
+    @abstractmethod
     def deserialize(cached_config: dict) -> "Function":
+        pass
+
+
+class Workflow(CloudBenchmark):
+    @staticmethod
+    @abstractmethod
+    def deserialize(cached_config: dict) -> "Workflow":
         pass

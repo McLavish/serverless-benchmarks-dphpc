@@ -127,14 +127,17 @@ class GCPResources(Resources):
 
         cached_config = cache.get_config("gcp")
         ret = GCPResources()
+        print(config)
         if cached_config and "resources" in cached_config:
             GCPResources.initialize(ret, cached_config["resources"])
+            ret.load_redis(cached_config["resources"])
             ret.logging_handlers = handlers
             ret.logging.info("Using cached resources for GCP")
         else:
 
             if "resources" in config:
                 GCPResources.initialize(ret, config["resources"])
+                ret.load_redis(config["resources"])
                 ret.logging_handlers = handlers
                 ret.logging.info("No cached resources for GCP found, using user configuration.")
             else:
@@ -143,6 +146,9 @@ class GCPResources(Resources):
                 ret.logging.info("No resources for GCP found, initialize!")
 
         return ret
+
+    def update_cache(self, cache: Cache):
+        super().update_cache_redis(keys=["gcp", "resources"], cache=cache)
 
     def update_cache(self, cache: Cache):
         super().update_cache(cache)
@@ -215,6 +221,7 @@ class GCPConfig(Config):
     @staticmethod
     def initialize(cfg: Config, dct: dict):
         config = cast(GCPConfig, cfg)
+        print(dct)
         config._region = dct["region"]
 
     def serialize(self) -> dict:

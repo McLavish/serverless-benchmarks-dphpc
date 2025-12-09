@@ -153,7 +153,11 @@ class SeBS(LoggingBase):
         return ExperimentConfig.deserialize(config)
 
     def get_experiment(
-        self, experiment_type: str, config: dict, logging_filename: Optional[str] = None
+        self,
+        experiment_type: str,
+        config: dict,
+        is_workflow: bool,
+        logging_filename: Optional[str] = None,
     ) -> Experiment:
         from sebs.experiments import (
             Experiment,
@@ -171,7 +175,9 @@ class SeBS(LoggingBase):
         }
         if experiment_type not in implementations:
             raise RuntimeError(f"Experiment {experiment_type} not supported!")
-        experiment = implementations[experiment_type](self.get_experiment_config(config))
+        experiment = implementations[experiment_type](
+            self.get_experiment_config(config), is_workflow
+        )
         experiment.logging_handlers = self.generate_logging_handlers(
             logging_filename=logging_filename
         )
@@ -184,7 +190,7 @@ class SeBS(LoggingBase):
         config: ExperimentConfig,
         logging_filename: Optional[str] = None,
     ) -> Benchmark:
-        benchmark = Benchmark(
+        code_package = Benchmark(
             name,
             deployment.name(),
             config,
@@ -193,10 +199,10 @@ class SeBS(LoggingBase):
             self.cache_client,
             self.docker_client,
         )
-        benchmark.logging_handlers = self.generate_logging_handlers(
+        code_package.logging_handlers = self.generate_logging_handlers(
             logging_filename=logging_filename
         )
-        return benchmark
+        return code_package
 
     @staticmethod
     def get_storage_implementation(storage_type: types.Storage) -> Type[PersistentStorage]:

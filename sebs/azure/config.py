@@ -366,6 +366,7 @@ class AzureResources(Resources):
     """
 
     def update_cache(self, cache_client: Cache):
+        super().update_cache_redis(keys=["azure", "resources"], cache=cache_client)
         super().update_cache(cache_client)
         cache_client.update_config(val=self.serialize(), keys=["azure", "resources"])
 
@@ -375,7 +376,8 @@ class AzureResources(Resources):
         ret = cast(AzureResources, res)
         super(AzureResources, AzureResources).initialize(ret, dct)
 
-        ret._resource_group = dct["resource_group"]
+        if "resource_group" in dct:
+            ret._resource_group = dct["resource_group"]
         if "storage_accounts" in dct:
             ret._storage_accounts = [
                 AzureResources.Storage.deserialize(x) for x in dct["storage_accounts"]
@@ -401,7 +403,7 @@ class AzureResources(Resources):
             out["cosmosdb_account"] = self._cosmosdb_account.serialize()
         if self._data_storage_account:
             out["data_storage_account"] = self._data_storage_account.serialize()
-        return out
+        return {**super().serialize(), **out}
 
     @staticmethod
     def deserialize(config: dict, cache: Cache, handlers: LoggingHandlers) -> Resources:
@@ -412,10 +414,12 @@ class AzureResources(Resources):
         if cached_config and "resources" in cached_config and len(cached_config["resources"]) > 0:
             logging.info("Using cached resources for Azure")
             AzureResources.initialize(ret, cached_config["resources"])
+            ret.load_redis(cached_config["resources"])
         else:
             # Check for new config
             if "resources" in config:
                 AzureResources.initialize(ret, config["resources"])
+                ret.load_redis(config["resources"])
                 ret.logging_handlers = handlers
                 ret.logging.info("No cached resources for Azure found, using user configuration.")
             else:

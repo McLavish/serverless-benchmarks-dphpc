@@ -26,19 +26,20 @@ if "STORAGE_CONNECTION_STRING" in os.environ:
 
 # TODO: usual trigger
 # implement support for blob and others
-
-
-def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
+def main(req: func.HttpRequest, starter: str, context: func.Context) -> func.HttpResponse:
     income_timestamp = datetime.datetime.now().timestamp()
+
     req_json = req.get_json()
 
-    req_json["request-id"] = context.invocation_id
+    # FIXME: proper placement of request
+    # req_json['request-id'] = context.invocation_id
+    req_json["payload"]["request-id"] = context.invocation_id
     req_json["income-timestamp"] = income_timestamp
     begin = datetime.datetime.now()
     # We are deployed in the same directory
     from . import function
 
-    ret = function.handler(req_json)
+    ret = function.handler(req_json["payload"])
     end = datetime.datetime.now()
 
     log_data = {"output": ret["result"]}

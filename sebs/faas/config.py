@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from abc import abstractmethod
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from sebs.cache import Cache
 from sebs.utils import has_platform, LoggingBase, LoggingHandlers
@@ -69,6 +69,8 @@ class Resources(ABC, LoggingBase):
 
     def __init__(self, name: str):
         super().__init__()
+        self._redis_host: Optional[str] = None
+        self._redis_password: Optional[str] = None
         self._name = name
         self._buckets: Dict[Resources.StorageBucketType, str] = {}
         self._resources_id: Optional[str] = None
@@ -93,6 +95,14 @@ class Resources(ABC, LoggingBase):
     @region.setter
     def region(self, region: str):
         self._region = region
+
+    @property
+    def redis_host(self) -> Optional[str]:
+        return self._redis_host
+
+    @property
+    def redis_password(self) -> Optional[str]:
+        return self._redis_password
 
     def get_storage_bucket(self, bucket_type: Resources.StorageBucketType) -> Optional[str]:
         return self._buckets.get(bucket_type)
@@ -123,17 +133,28 @@ class Resources(ABC, LoggingBase):
     def deserialize(config: dict, cache: Cache, handlers: LoggingHandlers) -> "Resources":
         pass
 
+    def load_redis(self, config: dict):
+        if "redis" in config:
+            self._redis_host = config["redis"]["host"]
+            self._redis_password = config["redis"]["password"]
+
+    def update_cache_redis(self, keys: List[str], cache: Cache):
+        if self._redis_host is not None:
+            cache.update_config(val=self._redis_host, keys=[*keys, "redis", "host"])
+            cache.update_config(val=self._redis_password, keys=[*keys, "redis", "password"])
+
     """
         Serialize to JSON for storage in cache.
     """
 
-    @abstractmethod
     def serialize(self) -> dict:
         out = {}
         if self.has_resources_id:
             out["resources_id"] = self.resources_id
         for key, value in self._buckets.items():
             out[key.value] = value
+        if self._redis_host is not None:
+            out["redis"] = {"host": self._redis_host, "password": self._redis_password}
         return out
 
     def update_cache(self, cache: Cache):
