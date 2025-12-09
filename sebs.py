@@ -101,7 +101,7 @@ def common_params(func):
     @click.option(
         "--container-deployment/--no-container-deployment",
         default=False,
-        help="Deploy functions as containers (AWS only). When enabled, functions are packaged as container images and pushed to Amazon ECR."
+        help="Deploy functions as containers (AWS only). When enabled, functions are packaged as container images and pushed to Amazon ECR.",
     )
     @click.option(
         "--resource-prefix",
@@ -109,7 +109,6 @@ def common_params(func):
         type=str,
         help="Resource prefix to look for.",
     )
-
     @simplified_common_params
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -135,7 +134,7 @@ def parse_common_params(
     resource_prefix: Optional[str] = None,
     initialize_deployment: bool = True,
     ignore_cache: bool = False,
-    storage_configuration: Optional[List[str]] = None
+    storage_configuration: Optional[List[str]] = None,
 ):
 
     global sebs_client, deployment_client
@@ -165,7 +164,7 @@ def parse_common_params(
         for cfg_f in storage_configuration:
             sebs_client.logging.info(f"Loading storage configuration from {cfg_f}")
 
-            cfg = json.load(open(cfg_f, 'r'))
+            cfg = json.load(open(cfg_f, "r"))
             append_nested_dict(config_obj, ["deployment", deployment, "storage"], cfg)
 
     if initialize_deployment:
@@ -230,7 +229,12 @@ def benchmark():
     type=str,
     help="Attach prefix to generated Docker image tag.",
 )
-@click.option("--storage-configuration", type=str, multiple=True, help="JSON configuration of deployed storage.")
+@click.option(
+    "--storage-configuration",
+    type=str,
+    multiple=True,
+    help="JSON configuration of deployed storage.",
+)
 @common_params
 def invoke(
     benchmark,
@@ -244,13 +248,9 @@ def invoke(
     **kwargs,
 ):
 
-    (
-        config,
-        output_dir,
-        logging_filename,
-        sebs_client,
-        deployment_client
-    ) = parse_common_params(**kwargs)
+    (config, output_dir, logging_filename, sebs_client, deployment_client) = parse_common_params(
+        **kwargs
+    )
 
     if image_tag_prefix is not None:
         sebs_client.config.image_tag_prefix = image_tag_prefix
@@ -269,7 +269,11 @@ def invoke(
     if timeout is not None:
         benchmark_obj.benchmark_config.timeout = timeout
 
-    input_config = benchmark_obj.prepare_input(deployment_client.system_resources, size=benchmark_input_size, replace_existing=experiment_config.update_storage)
+    input_config = benchmark_obj.prepare_input(
+        deployment_client.system_resources,
+        size=benchmark_input_size,
+        replace_existing=experiment_config.update_storage,
+    )
 
     func = deployment_client.get_function(
         benchmark_obj,
@@ -395,7 +399,7 @@ def storage_start(storage, config, output_json):
     import docker
 
     sebs.utils.global_logging()
-    user_storage_config = json.load(open(config, 'r'))
+    user_storage_config = json.load(open(config, "r"))
 
     if storage in ["object", "all"]:
 
@@ -459,7 +463,9 @@ def storage_stop(storage, input_json):
         config = storage_cfg.deserialize(cfg["object"][storage_type])
 
         logging.info(f"Stopping storage deployment of {storage_type}.")
-        storage_instance = sebs.SeBS.get_storage_implementation(storage_type).deserialize(config, None, None)
+        storage_instance = sebs.SeBS.get_storage_implementation(storage_type).deserialize(
+            config, None, None
+        )
         storage_instance.stop()
         logging.info(f"Stopped storage deployment of {storage_type}.")
 
@@ -471,9 +477,12 @@ def storage_stop(storage, input_json):
         config = storage_cfg.deserialize(cfg["nosql"][storage_type])
 
         logging.info(f"Stopping nosql deployment of {storage_type}.")
-        storage_instance = sebs.SeBS.get_nosql_implementation(storage_type).deserialize(config, None, None)
+        storage_instance = sebs.SeBS.get_nosql_implementation(storage_type).deserialize(
+            config, None, None
+        )
         storage_instance.stop()
         logging.info(f"Stopped nosql deployment of {storage_type}.")
+
 
 @cli.group()
 def local():
@@ -485,9 +494,18 @@ def local():
 @click.argument("benchmark-input-size", type=click.Choice(["test", "small", "large"]))
 @click.argument("output", type=str)
 @click.option("--deployments", default=1, type=int, help="Number of deployed containers.")
-@click.option("--storage-configuration", type=str, multiple=True, help="JSON configuration of deployed storage.")
-@click.option("--measure-interval", type=int, default=-1,
-              help="Interval duration between memory measurements in ms.")
+@click.option(
+    "--storage-configuration",
+    type=str,
+    multiple=True,
+    help="JSON configuration of deployed storage.",
+)
+@click.option(
+    "--measure-interval",
+    type=int,
+    default=-1,
+    help="Interval duration between memory measurements in ms.",
+)
 @click.option(
     "--remove-containers/--no-remove-containers",
     default=True,
@@ -516,10 +534,13 @@ def start(
     """
 
     (config, output_dir, logging_filename, sebs_client, deployment_client) = parse_common_params(
-        update_code=False, update_storage=False,
-        deployment="local", storage_configuration=storage_configuration,
-        container_deployment=False, architecture=architecture,
-        **kwargs
+        update_code=False,
+        update_storage=False,
+        deployment="local",
+        storage_configuration=storage_configuration,
+        container_deployment=False,
+        architecture=architecture,
+        **kwargs,
     )
     deployment_client = cast(sebs.local.Local, deployment_client)
     deployment_client.remove_containers = remove_containers
@@ -536,14 +557,17 @@ def start(
     input_config = benchmark_obj.prepare_input(
         deployment_client.system_resources,
         size=benchmark_input_size,
-        replace_existing=experiment_config.update_storage
+        replace_existing=experiment_config.update_storage,
     )
     result.set_storage(deployment_client.system_resources.get_storage())
     result.add_input(input_config)
 
     for i in range(deployments):
         func = deployment_client.get_function(
-            benchmark_obj, deployment_client.default_function_name(benchmark_obj,deployment_client.config.resources)
+            benchmark_obj,
+            deployment_client.default_function_name(
+                benchmark_obj, deployment_client.config.resources
+            ),
         )
         result.add_function(func)
 
@@ -611,6 +635,139 @@ def experiment_process(experiment, extend_time_interval, **kwargs):
     experiment.process(
         sebs_client, deployment_client, output_dir, logging_filename, extend_time_interval
     )
+
+
+@experiment.command("gpu-app-metrics")
+@click.option(
+    "--runs",
+    default=50,
+    type=int,
+    help="Number of repetitions per size for app-level GPU microbenchmarks.",
+)
+@click.option(
+    "--output-subdir",
+    default="gpu_app_metrics",
+    type=str,
+    help="Subdirectory under output-dir to store app-level plots.",
+)
+@common_params
+def experiment_gpu_app_metrics(runs, output_subdir, **kwargs):
+    """
+    GPU app-level profiling for selected benchmarks.
+
+    Benchmarks ：
+      - 0xx.host-device-copy
+      - 0xx.vector-add
+      - 5xx.compute_jax_npbench
+      - 5xx.channel_flow_jax_npbench
+    """
+
+    (
+        config,
+        output_dir,
+        logging_filename,
+        sebs_client,
+        deployment_client,
+    ) = parse_common_params(**kwargs)
+
+    from experiment import gpu_app_metrics
+
+    # overlap RUNS
+    gpu_app_metrics.RUNS = runs
+
+    # samewith benchmarks
+    BENCHMARK_IDS = {
+        "host-device-copy": "0xx.host-device-copy",
+        "vector-add": "0xx.vector-add",
+        "compute": "5xx.compute_jax_npbench",
+        "channel-flow": "5xx.channel_flow_jax_npbench",
+    }
+
+    experiment_cfg = sebs_client.get_experiment_config(config["experiments"])
+
+    def make_invoker(short_name: str):
+        bench_id = BENCHMARK_IDS[short_name]
+
+        update_nested_dict(config, ["experiments", "benchmark"], bench_id)
+
+        benchmark_obj = sebs_client.get_benchmark(
+            bench_id,
+            deployment_client,
+            experiment_cfg,
+            logging_filename=logging_filename,
+        )
+
+        if deployment_client.name() == "local":
+            default_name = deployment_client.default_function_name(
+                benchmark_obj, deployment_client.config.resources
+            )
+        else:
+            default_name = deployment_client.default_function_name(benchmark_obj)
+
+        func = deployment_client.get_function(benchmark_obj, default_name)
+
+        trigger_type = Trigger.TriggerType.get("http")
+        triggers = func.triggers(trigger_type)
+        if len(triggers) > 0:
+            trigger = triggers[0]
+        else:
+            trigger = deployment_client.create_trigger(func, trigger_type)
+
+        def _invoke(event: dict):
+            """
+            event shape in function.py:
+              - host-device-copy: {"size": int, "iters": int}
+              - vector-add     : {"size": int, "iters": int}
+              - compute        : {"size": {"M":, "N":}, "iters": int}
+              - channel-flow   : {"size": {...}}
+            """
+            ret = trigger.sync_invoke(event)
+
+            if hasattr(ret, "stats") and getattr(ret.stats, "failure", False):
+                raise RuntimeError(f"{short_name} invocation failed: {ret.stats}")
+
+            out = getattr(ret, "output", None)
+            if out is None:
+                return {}
+
+            # JSON string/dict
+            if isinstance(out, (bytes, str)):
+                import json as _json
+
+                try:
+                    out = _json.loads(out)
+                except Exception:
+                    pass
+
+            if not isinstance(out, dict):
+                raise RuntimeError(
+                    f"Unexpected output type from {short_name}: {type(out)}; value={out!r}"
+                )
+            return out
+
+        return _invoke
+
+    # invoker
+    invokers = {
+        "host-device-copy": make_invoker("host-device-copy"),
+        "vector-add": make_invoker("vector-add"),
+        "compute": make_invoker("compute"),
+        "channel-flow": make_invoker("channel-flow"),
+    }
+
+    # output_dir
+    plots_dir = os.path.join(output_dir, output_subdir)
+    os.makedirs(plots_dir, exist_ok=True)
+    sebs_client.logging.info(f"Writing GPU app-level plots into {plots_dir}")
+
+    old_cwd = os.getcwd()
+    os.chdir(plots_dir)
+    try:
+        gpu_app_metrics.run_all(invokers, out_dir=".")
+    finally:
+        os.chdir(old_cwd)
+
+    sebs_client.logging.info("GPU app-level metrics experiment finished.")
 
 
 @cli.group()
