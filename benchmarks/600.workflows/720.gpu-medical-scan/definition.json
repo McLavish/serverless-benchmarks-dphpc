@@ -1,0 +1,26 @@
+{
+  "root": "preprocess",
+  "states": {
+    "preprocess": {
+      "type": "task",
+      "func_name": "preprocess",
+      "next": "segment-map"
+    },
+    "segment-map": {
+      "type": "map",
+      "root": "segment",
+      "array": "slices",
+      "next": "aggregate",
+      "states": {
+        "segment": {
+          "type": "task",
+          "func_name": "segment"
+        }
+      }
+    },
+    "aggregate": {
+      "type": "task",
+      "func_name": "aggregate"
+    }
+  }
+}

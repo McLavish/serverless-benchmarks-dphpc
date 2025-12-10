@@ -1,5 +1,5 @@
 size_generators = {
-    "test": (30, 100),   # 30 posts, avg 100 tokens per post
+    "test": (30, 100),  # 30 posts, avg 100 tokens per post
     "small": (100, 200),
     "large": (250, 300),
 }

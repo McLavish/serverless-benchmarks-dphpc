@@ -2,23 +2,80 @@ import uuid
 import numpy as np
 
 
-POST_CATEGORIES = ["news", "personal", "commercial", "entertainment", "educational", "political", "social"]
+POST_CATEGORIES = [
+    "news",
+    "personal",
+    "commercial",
+    "entertainment",
+    "educational",
+    "political",
+    "social",
+]
 LANGUAGES = ["en", "es", "fr", "de", "pt", "it"]
 
 SAFE_WORDS = [
-    "cat", "dog", "food", "travel", "music", "art", "game", "tech", "book", "movie",
-    "friend", "family", "work", "love", "happy", "great", "amazing", "beautiful", "fun", "enjoy",
-    "today", "yesterday", "tomorrow", "share", "post", "comment", "like", "follow", "update"
+    "cat",
+    "dog",
+    "food",
+    "travel",
+    "music",
+    "art",
+    "game",
+    "tech",
+    "book",
+    "movie",
+    "friend",
+    "family",
+    "work",
+    "love",
+    "happy",
+    "great",
+    "amazing",
+    "beautiful",
+    "fun",
+    "enjoy",
+    "today",
+    "yesterday",
+    "tomorrow",
+    "share",
+    "post",
+    "comment",
+    "like",
+    "follow",
+    "update",
 ]
 
 BORDERLINE_WORDS = [
-    "debate", "opinion", "protest", "controversial", "argument", "disagree", "conflict",
-    "political", "election", "policy", "criticism", "oppose", "challenge"
+    "debate",
+    "opinion",
+    "protest",
+    "controversial",
+    "argument",
+    "disagree",
+    "conflict",
+    "political",
+    "election",
+    "policy",
+    "criticism",
+    "oppose",
+    "challenge",
 ]
 
 UNSAFE_WORDS = [
-    "hate", "violence", "spam", "scam", "fake", "attack", "threat", "abuse", "harass",
-    "derogatory", "discriminate", "offensive", "vulgar", "explicit"
+    "hate",
+    "violence",
+    "spam",
+    "scam",
+    "fake",
+    "attack",
+    "threat",
+    "abuse",
+    "harass",
+    "derogatory",
+    "discriminate",
+    "offensive",
+    "vulgar",
+    "explicit",
 ]
 
 
@@ -32,25 +89,23 @@ def generate_text_content(avg_tokens: int, seed: int, violation_prob: float = 0.
     if has_violation:
         violation_type = rng.choice(
             ["hate_speech", "violence", "spam", "misinformation", "harassment"],
-            p=[0.25, 0.2, 0.3, 0.15, 0.1]
+            p=[0.25, 0.2, 0.3, 0.15, 0.1],
         )
 
         unsafe_ratio = rng.uniform(0.15, 0.4)
         n_unsafe = int(n_tokens * unsafe_ratio)
         n_safe = n_tokens - n_unsafe
 
-        words = (
-            list(rng.choice(UNSAFE_WORDS, size=n_unsafe, replace=True)) +
-            list(rng.choice(SAFE_WORDS, size=n_safe, replace=True))
+        words = list(rng.choice(UNSAFE_WORDS, size=n_unsafe, replace=True)) + list(
+            rng.choice(SAFE_WORDS, size=n_safe, replace=True)
         )
     else:
         borderline_ratio = rng.uniform(0, 0.2)
         n_borderline = int(n_tokens * borderline_ratio)
         n_safe = n_tokens - n_borderline
 
-        words = (
-            list(rng.choice(BORDERLINE_WORDS, size=n_borderline, replace=True)) +
-            list(rng.choice(SAFE_WORDS, size=n_safe, replace=True))
+        words = list(rng.choice(BORDERLINE_WORDS, size=n_borderline, replace=True)) + list(
+            rng.choice(SAFE_WORDS, size=n_safe, replace=True)
         )
         violation_type = None
 

@@ -3,20 +3,29 @@ def calculate_accuracy(posts: list) -> dict:
 
     detected_violations = [p for p in posts if p.get("action") in ["REMOVE", "REVIEW"]]
 
-    true_positives = len([
-        p for p in posts
-        if p.get("true_violation") is not None and p.get("action") in ["REMOVE", "REVIEW"]
-    ])
+    true_positives = len(
+        [
+            p
+            for p in posts
+            if p.get("true_violation") is not None and p.get("action") in ["REMOVE", "REVIEW"]
+        ]
+    )
 
-    false_positives = len([
-        p for p in posts
-        if p.get("true_violation") is None and p.get("action") in ["REMOVE", "REVIEW"]
-    ])
+    false_positives = len(
+        [
+            p
+            for p in posts
+            if p.get("true_violation") is None and p.get("action") in ["REMOVE", "REVIEW"]
+        ]
+    )
 
-    false_negatives = len([
-        p for p in posts
-        if p.get("true_violation") is not None and p.get("action") not in ["REMOVE", "REVIEW"]
-    ])
+    false_negatives = len(
+        [
+            p
+            for p in posts
+            if p.get("true_violation") is not None and p.get("action") not in ["REMOVE", "REVIEW"]
+        ]
+    )
 
     precision = true_positives / len(detected_violations) if detected_violations else 0.0
     recall = true_positives / len(true_violations) if true_violations else 0.0

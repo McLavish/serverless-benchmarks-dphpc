@@ -1,7 +1,17 @@
 import numpy as np
 
 
-UNSAFE_KEYWORDS = ["hate", "violence", "spam", "scam", "fake", "attack", "threat", "abuse", "harass"]
+UNSAFE_KEYWORDS = [
+    "hate",
+    "violence",
+    "spam",
+    "scam",
+    "fake",
+    "attack",
+    "threat",
+    "abuse",
+    "harass",
+]
 BORDERLINE_KEYWORDS = ["controversial", "debate", "protest", "argument"]
 
 
@@ -51,38 +61,48 @@ def classify_violation_type(text: str, toxicity_score: float, seed: int) -> list
 
     if "hate" in words or "discriminate" in words or "derogatory" in words:
         confidence = min(0.95, toxicity_score + rng.uniform(0.1, 0.2))
-        violations.append({
-            "type": "hate_speech",
-            "confidence": float(confidence),
-        })
+        violations.append(
+            {
+                "type": "hate_speech",
+                "confidence": float(confidence),
+            }
+        )
 
     if "violence" in words or "attack" in words or "threat" in words:
         confidence = min(0.95, toxicity_score + rng.uniform(0.1, 0.2))
-        violations.append({
-            "type": "violence",
-            "confidence": float(confidence),
-        })
+        violations.append(
+            {
+                "type": "violence",
+                "confidence": float(confidence),
+            }
+        )
 
     if "spam" in words or "scam" in words:
         confidence = min(0.9, toxicity_score + rng.uniform(0.05, 0.15))
-        violations.append({
-            "type": "spam",
-            "confidence": float(confidence),
-        })
+        violations.append(
+            {
+                "type": "spam",
+                "confidence": float(confidence),
+            }
+        )
 
     if "fake" in words:
         confidence = min(0.85, toxicity_score + rng.uniform(0.05, 0.15))
-        violations.append({
-            "type": "misinformation",
-            "confidence": float(confidence),
-        })
+        violations.append(
+            {
+                "type": "misinformation",
+                "confidence": float(confidence),
+            }
+        )
 
     if "harass" in words or "abuse" in words:
         confidence = min(0.9, toxicity_score + rng.uniform(0.1, 0.2))
-        violations.append({
-            "type": "harassment",
-            "confidence": float(confidence),
-        })
+        violations.append(
+            {
+                "type": "harassment",
+                "confidence": float(confidence),
+            }
+        )
 
     return violations
 
@@ -109,7 +129,11 @@ def sentiment_analysis(text: str, seed: int) -> dict:
 
     return {
         "sentiment_score": float(sentiment_score),
-        "polarity": "positive" if sentiment_score > 0.1 else "negative" if sentiment_score < -0.1 else "neutral",
+        "polarity": "positive"
+        if sentiment_score > 0.1
+        else "negative"
+        if sentiment_score < -0.1
+        else "neutral",
     }
 
 
@@ -152,9 +176,9 @@ def handler(post):
     spam_score = calculate_spam_score(post)
 
     overall_score = (
-        0.5 * toxicity_score +
-        0.3 * spam_score +
-        0.2 * (1.0 if sentiment["sentiment_score"] < -0.3 else 0.0)
+        0.5 * toxicity_score
+        + 0.3 * spam_score
+        + 0.2 * (1.0 if sentiment["sentiment_score"] < -0.3 else 0.0)
     )
 
     if overall_score > 0.75:

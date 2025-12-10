@@ -1,0 +1,19 @@
+{
+  "root": "fetch",
+  "states": {
+    "fetch": {
+      "type": "task",
+      "func_name": "fetch_batch",
+      "next": "embed"
+    },
+    "embed": {
+      "type": "task",
+      "func_name": "embed",
+      "next": "summarize"
+    },
+    "summarize": {
+      "type": "task",
+      "func_name": "summarize"
+    }
+  }
+}
