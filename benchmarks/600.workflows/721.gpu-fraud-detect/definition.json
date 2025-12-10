@@ -1,0 +1,26 @@
+{
+  "root": "ingest",
+  "states": {
+    "ingest": {
+      "type": "task",
+      "func_name": "ingest",
+      "next": "analyze-map"
+    },
+    "analyze-map": {
+      "type": "map",
+      "root": "analyze",
+      "array": "transactions",
+      "next": "risk-score",
+      "states": {
+        "analyze": {
+          "type": "task",
+          "func_name": "analyze"
+        }
+      }
+    },
+    "risk-score": {
+      "type": "task",
+      "func_name": "risk_score"
+    }
+  }
+}
