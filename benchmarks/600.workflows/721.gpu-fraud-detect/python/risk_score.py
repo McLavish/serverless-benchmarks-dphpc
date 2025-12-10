@@ -4,8 +4,16 @@ def calculate_metrics(results: list) -> dict:
     false_negatives = sum(1 for r in results if not r["is_flagged"] and r.get("true_label") == 1)
     true_negatives = sum(1 for r in results if not r["is_flagged"] and r.get("true_label") == 0)
 
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
+    precision = (
+        true_positives / (true_positives + false_positives)
+        if (true_positives + false_positives) > 0
+        else 0.0
+    )
+    recall = (
+        true_positives / (true_positives + false_negatives)
+        if (true_positives + false_negatives) > 0
+        else 0.0
+    )
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     return {
@@ -46,7 +54,15 @@ def handler(event):
 
     # Determine overall risk level
     fraud_rate = flagged_count / total_transactions if total_transactions > 0 else 0
-    risk_level = "CRITICAL" if fraud_rate > 0.3 else "HIGH" if fraud_rate > 0.15 else "MEDIUM" if fraud_rate > 0.05 else "LOW"
+    risk_level = (
+        "CRITICAL"
+        if fraud_rate > 0.3
+        else "HIGH"
+        if fraud_rate > 0.15
+        else "MEDIUM"
+        if fraud_rate > 0.05
+        else "LOW"
+    )
 
     return {
         "summary": f"Analyzed {total_transactions} transactions",

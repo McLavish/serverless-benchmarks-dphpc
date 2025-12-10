@@ -33,7 +33,7 @@ def rule_based_scoring(transaction: dict) -> float:
     if features[1] < 0.2 or features[1] > 0.8:
         score += 0.2
 
-    location_dist = np.sqrt(features[2]**2 + features[3]**2)
+    location_dist = np.sqrt(features[2] ** 2 + features[3] ** 2)
     if location_dist > 0.7:
         score += 0.25
 
@@ -51,22 +51,28 @@ def detect_patterns(transaction: dict) -> list:
     features = np.array(transaction["features"])
 
     if features[0] < 0.1 and features[4] < 0.1:
-        patterns.append({
-            "type": "card_testing",
-            "confidence": 0.85,
-        })
+        patterns.append(
+            {
+                "type": "card_testing",
+                "confidence": 0.85,
+            }
+        )
 
-    if features[0] > 0.75 and np.sqrt(features[2]**2 + features[3]**2) > 0.6:
-        patterns.append({
-            "type": "account_takeover",
-            "confidence": 0.78,
-        })
+    if features[0] > 0.75 and np.sqrt(features[2] ** 2 + features[3] ** 2) > 0.6:
+        patterns.append(
+            {
+                "type": "account_takeover",
+                "confidence": 0.78,
+            }
+        )
 
     if features[4] < 0.05:
-        patterns.append({
-            "type": "velocity_abuse",
-            "confidence": 0.72,
-        })
+        patterns.append(
+            {
+                "type": "velocity_abuse",
+                "confidence": 0.72,
+            }
+        )
 
     return patterns
 
