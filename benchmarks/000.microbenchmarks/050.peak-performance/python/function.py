@@ -11,7 +11,7 @@ def initialize_torch(size, dtype=torch.float16, device="cuda"):
 
 def handler(event):
 
-    size = event.get("size", 1000)
+    size = event.get("size", 100000)
     reps = event.get("reps", 100)
 
     if "seed" in event:
