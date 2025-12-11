@@ -95,6 +95,7 @@ WORKFLOWS=(
   "670.auth"
   "680.excamera"
   "690.ml"
+  "696.vector_search"
 )
 
 for wf in "${WORKFLOWS[@]}"; do

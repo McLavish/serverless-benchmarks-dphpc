@@ -1,0 +1,293 @@
+{
+  "_invocations": {
+    "sebd-050.gpu-cache-latency-python-3.10": {
+      "0d91cced-83b9-466e-b6d8-2a25152f989b": {
+        "billing": {
+          "_billed_time": null,
+          "_gb_seconds": 0,
+          "_memory": null
+        },
+        "output": {
+          "begin": "1764150078.461562",
+          "end": "1764150078.461567",
+          "is_cold": false,
+          "request_id": "0d91cced-83b9-466e-b6d8-2a25152f989b",
+          "result": {
+            "output": {
+              "result": {
+                "avg_ns_per_step": 1911.896669989801,
+                "device": "cpu",
+                "iterations": 100000,
+                "pattern": "random",
+                "sink": 13278628922,
+                "total_seconds": 0.1911896669989801,
+                "working_set_bytes": 1048576
+              }
+            }
+          }
+        },
+        "provider_times": {
+          "execution": 0,
+          "initialization": 0
+        },
+        "request_id": "0d91cced-83b9-466e-b6d8-2a25152f989b",
+        "stats": {
+          "cold_start": false,
+          "failure": false,
+          "memory_used": null
+        },
+        "times": {
+          "benchmark": 5,
+          "client": 197697,
+          "client_begin": "2025-11-26 10:41:18.461377",
+          "client_end": "2025-11-26 10:41:18.659074",
+          "http_first_byte_return": 0.197566,
+          "http_startup": 0.000185,
+          "initialization": 0
+        }
+      },
+      "1726d3b4-27d6-48f4-a22b-195815f194d7": {
+        "billing": {
+          "_billed_time": null,
+          "_gb_seconds": 0,
+          "_memory": null
+        },
+        "output": {
+          "begin": "1764150078.062390",
+          "end": "1764150078.062396",
+          "is_cold": false,
+          "request_id": "1726d3b4-27d6-48f4-a22b-195815f194d7",
+          "result": {
+            "output": {
+              "result": {
+                "avg_ns_per_step": 1904.4387500071025,
+                "device": "cpu",
+                "iterations": 100000,
+                "pattern": "random",
+                "sink": 13278628922,
+                "total_seconds": 0.19044387500071025,
+                "working_set_bytes": 1048576
+              }
+            }
+          }
+        },
+        "provider_times": {
+          "execution": 0,
+          "initialization": 0
+        },
+        "request_id": "1726d3b4-27d6-48f4-a22b-195815f194d7",
+        "stats": {
+          "cold_start": false,
+          "failure": false,
+          "memory_used": null
+        },
+        "times": {
+          "benchmark": 6,
+          "client": 197306,
+          "client_begin": "2025-11-26 10:41:18.061718",
+          "client_end": "2025-11-26 10:41:18.259024",
+          "http_first_byte_return": 0.197218,
+          "http_startup": 0.000397,
+          "initialization": 0
+        }
+      },
+      "29d22f26-f726-4c23-ba70-96aa0a3f9a8d": {
+        "billing": {
+          "_billed_time": null,
+          "_gb_seconds": 0,
+          "_memory": null
+        },
+        "output": {
+          "begin": "1764150078.259286",
+          "end": "1764150078.259292",
+          "is_cold": false,
+          "request_id": "29d22f26-f726-4c23-ba70-96aa0a3f9a8d",
+          "result": {
+            "output": {
+              "result": {
+                "avg_ns_per_step": 1959.5562599897676,
+                "device": "cpu",
+                "iterations": 100000,
+                "pattern": "random",
+                "sink": 13278628922,
+                "total_seconds": 0.19595562599897676,
+                "working_set_bytes": 1048576
+              }
+            }
+          }
+        },
+        "provider_times": {
+          "execution": 0,
+          "initialization": 0
+        },
+        "request_id": "29d22f26-f726-4c23-ba70-96aa0a3f9a8d",
+        "stats": {
+          "cold_start": false,
+          "failure": false,
+          "memory_used": null
+        },
+        "times": {
+          "benchmark": 6,
+          "client": 201756,
+          "client_begin": "2025-11-26 10:41:18.259326",
+          "client_end": "2025-11-26 10:41:18.461082",
+          "http_first_byte_return": 0.201626,
+          "http_startup": 0.000225,
+          "initialization": 0
+        }
+      },
+      "bd015aef-7b56-4ea4-820c-c8e539570c4f": {
+        "billing": {
+          "_billed_time": null,
+          "_gb_seconds": 0,
+          "_memory": null
+        },
+        "output": {
+          "begin": "1764150078.659194",
+          "end": "1764150078.659200",
+          "is_cold": false,
+          "request_id": "bd015aef-7b56-4ea4-820c-c8e539570c4f",
+          "result": {
+            "output": {
+              "result": {
+                "avg_ns_per_step": 1902.405840010033,
+                "device": "cpu",
+                "iterations": 100000,
+                "pattern": "random",
+                "sink": 13278628922,
+                "total_seconds": 0.1902405840010033,
+                "working_set_bytes": 1048576
+              }
+            }
+          }
+        },
+        "provider_times": {
+          "execution": 0,
+          "initialization": 0
+        },
+        "request_id": "bd015aef-7b56-4ea4-820c-c8e539570c4f",
+        "stats": {
+          "cold_start": false,
+          "failure": false,
+          "memory_used": null
+        },
+        "times": {
+          "benchmark": 6,
+          "client": 195615,
+          "client_begin": "2025-11-26 10:41:18.659342",
+          "client_end": "2025-11-26 10:41:18.854957",
+          "http_first_byte_return": 0.195526,
+          "http_startup": 0.000177,
+          "initialization": 0
+        }
+      },
+      "c544ae05-7091-4802-a111-c97ec562a3c8": {
+        "billing": {
+          "_billed_time": null,
+          "_gb_seconds": 0,
+          "_memory": null
+        },
+        "output": {
+          "begin": "1764150075.103657",
+          "end": "1764150077.828099",
+          "is_cold": false,
+          "request_id": "c544ae05-7091-4802-a111-c97ec562a3c8",
+          "result": {
+            "output": {
+              "result": {
+                "avg_ns_per_step": 1900.9379199997056,
+                "device": "cpu",
+                "iterations": 100000,
+                "pattern": "random",
+                "sink": 13278628922,
+                "total_seconds": 0.19009379199997056,
+                "working_set_bytes": 1048576
+              }
+            }
+          }
+        },
+        "provider_times": {
+          "execution": 0,
+          "initialization": 0
+        },
+        "request_id": "c544ae05-7091-4802-a111-c97ec562a3c8",
+        "stats": {
+          "cold_start": false,
+          "failure": false,
+          "memory_used": null
+        },
+        "times": {
+          "benchmark": 2724442,
+          "client": 2958093,
+          "client_begin": "2025-11-26 10:41:15.103258",
+          "client_end": "2025-11-26 10:41:18.061351",
+          "http_first_byte_return": 2.957874,
+          "http_startup": 0.000193,
+          "initialization": 0
+        }
+      }
+    }
+  },
+  "_metrics": {},
+  "begin_time": 1764150075.063694,
+  "config": {
+    "deployment": {
+      "name": "local",
+      "region": "",
+      "resources": {
+        "allocated_ports": [
+          9000,
+          9001,
+          9002,
+          9003,
+          9004,
+          9005,
+          9006,
+          9007,
+          9008,
+          9009
+        ],
+        "nosql": {
+          "access_key": "None",
+          "address": "host.docker.internal:9014",
+          "alternator_port": 8000,
+          "cpus": 1,
+          "data_volume": "scylladb-volume",
+          "instance_id": "28bb9d1e1cf0fc8651b71c8e22428ad61b141f269da57b3c19faf8bc0a935c1c",
+          "mapped_port": 9014,
+          "memory": "750",
+          "region": "None",
+          "secret_key": "None",
+          "version": "6.0"
+        },
+        "storage": {
+          "access_key": "Yx3rpHSVccJREvTqmHE8q917KTJAuoheXuUlwadUcRs",
+          "address": "host.docker.internal:9013",
+          "data_volume": "minio-volume",
+          "input_buckets": [],
+          "instance_id": "885d21350a7d087c28982c990cd593d5d658783d64c309b804b68b9177b59bc6",
+          "mapped_port": 9013,
+          "output_buckets": [],
+          "secret_key": "a39a589a6eb728a9b103b68dab320b70fa159d13d9db4a75593bc6270be647d1",
+          "type": "minio",
+          "version": "RELEASE.2024-07-16T23-46-41Z"
+        }
+      }
+    },
+    "experiments": {
+      "architecture": "x64",
+      "container_deployment": false,
+      "download_results": false,
+      "experiments": {},
+      "flags": {},
+      "runtime": {
+        "language": "python",
+        "version": "3.10"
+      },
+      "update_code": false,
+      "update_storage": false
+    }
+  },
+  "end_time": 1764150078.855052,
+  "result_bucket": null
+}

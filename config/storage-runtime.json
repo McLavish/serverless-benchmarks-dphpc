@@ -1,0 +1,33 @@
+{
+  "object": {
+    "type": "minio",
+    "minio": {
+      "address": "host.docker.internal:9013",
+      "mapped_port": 9013,
+      "access_key": "Yx3rpHSVccJREvTqmHE8q917KTJAuoheXuUlwadUcRs",
+      "secret_key": "a39a589a6eb728a9b103b68dab320b70fa159d13d9db4a75593bc6270be647d1",
+      "instance_id": "885d21350a7d087c28982c990cd593d5d658783d64c309b804b68b9177b59bc6",
+      "output_buckets": [],
+      "input_buckets": [],
+      "version": "RELEASE.2024-07-16T23-46-41Z",
+      "data_volume": "minio-volume",
+      "type": "minio"
+    }
+  },
+  "nosql": {
+    "type": "scylladb",
+    "scylladb": {
+      "address": "host.docker.internal:9014",
+      "mapped_port": 9014,
+      "alternator_port": 8000,
+      "access_key": "None",
+      "secret_key": "None",
+      "instance_id": "28bb9d1e1cf0fc8651b71c8e22428ad61b141f269da57b3c19faf8bc0a935c1c",
+      "region": "None",
+      "cpus": 1,
+      "memory": "750",
+      "version": "6.0",
+      "data_volume": "scylladb-volume"
+    }
+  }
+}
