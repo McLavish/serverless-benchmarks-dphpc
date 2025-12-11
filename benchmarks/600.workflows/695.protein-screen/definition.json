@@ -1,0 +1,26 @@
+{
+    "root": "generate",
+    "states": {
+        "generate": {
+            "type": "task",
+            "func_name": "generate",
+            "next": "evaluate-state"
+        },
+        "evaluate-state": {
+            "type": "map",
+            "root": "evaluate",
+            "array": "schedules",
+            "next": "select",
+            "states": {
+              "evaluate": {
+                "type": "task",
+                "func_name": "evaluate"
+              }
+            }
+        },
+        "select": {
+            "type": "task",
+            "func_name": "select"
+        }
+    }
+}
