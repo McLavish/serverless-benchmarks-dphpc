@@ -1,0 +1,26 @@
+{
+  "root": "ingest",
+  "states": {
+    "ingest": {
+      "type": "task",
+      "func_name": "ingest",
+      "next": "moderate-map"
+    },
+    "moderate-map": {
+      "type": "map",
+      "root": "moderate",
+      "array": "posts",
+      "next": "review",
+      "states": {
+        "moderate": {
+          "type": "task",
+          "func_name": "moderate"
+        }
+      }
+    },
+    "review": {
+      "type": "task",
+      "func_name": "review"
+    }
+  }
+}
