@@ -1,7 +1,6 @@
 # benchmarks/000.microbenchmarks/050.gpu-cache-latency/python/function.py
 
 import time
-import math
 import torch
 
 
