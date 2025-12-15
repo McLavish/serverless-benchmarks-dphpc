@@ -110,6 +110,4 @@ def handler(event, context=None):
     result = pointer_chase(working_set_bytes, pattern, iterations, seed=seed)
 
     # SeBS expects this shape
-    return {
-        "result": result
-    }
+    return {"result": result}
