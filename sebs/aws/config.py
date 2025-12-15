@@ -21,7 +21,9 @@ class AWSCredentials(Credentials):
         self._secret_key = secret_key
 
         client = boto3.client(
-            "sts", aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key
+            "sts",
+            aws_access_key_id=self.access_key,
+            aws_secret_access_key=self.secret_key,
         )
         self._account_id = client.get_caller_identity()["Account"]
 
@@ -334,7 +336,8 @@ class AWSResources(Resources):
             val=self.docker_username, keys=["aws", "resources", "docker", "username"]
         )
         cache.update_config(
-            val=self.container_repository, keys=["aws", "resources", "container_repository"]
+            val=self.container_repository,
+            keys=["aws", "resources", "container_repository"],
         )
         cache.update_config(val=self._lambda_role, keys=["aws", "resources", "lambda-role"])
         for name, api in self._http_apis.items():

@@ -354,7 +354,10 @@ class PerfCost(Experiment):
                         ) as out_f:
                             out_f.write(
                                 serialize(
-                                    {**json.loads(serialize(experiments)), "statistics": statistics}
+                                    {
+                                        **json.loads(serialize(experiments)),
+                                        "statistics": statistics,
+                                    }
                                 )
                             )
                 for func in experiments.functions():

@@ -59,7 +59,11 @@ class NoSQLStorage(ABC, LoggingBase):
     """
 
     def create_benchmark_tables(
-        self, benchmark: str, name: str, primary_key: str, secondary_key: Optional[str] = None
+        self,
+        benchmark: str,
+        name: str,
+        primary_key: str,
+        secondary_key: Optional[str] = None,
     ):
 
         if self.retrieve_cache(benchmark):
@@ -84,7 +88,11 @@ class NoSQLStorage(ABC, LoggingBase):
 
     @abstractmethod
     def create_table(
-        self, benchmark: str, name: str, primary_key: str, secondary_key: Optional[str] = None
+        self,
+        benchmark: str,
+        name: str,
+        primary_key: str,
+        secondary_key: Optional[str] = None,
     ) -> str:
         pass
 

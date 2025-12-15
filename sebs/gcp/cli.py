@@ -14,7 +14,10 @@ class GCloudCLI(LoggingBase):
         return "GCP.CLI"
 
     def __init__(
-        self, credentials: GCPCredentials, system_config: SeBSConfig, docker_client: docker.client
+        self,
+        credentials: GCPCredentials,
+        system_config: SeBSConfig,
+        docker_client: docker.client,
     ):
 
         super().__init__()

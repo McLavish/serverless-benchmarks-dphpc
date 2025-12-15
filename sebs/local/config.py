@@ -53,7 +53,8 @@ class LocalResources(SelfHostedResources):
     def update_cache(self, cache: Cache):
         super().update_cache(cache)
         cache.update_config(
-            val=list(self._allocated_ports), keys=["local", "resources", "allocated_ports"]
+            val=list(self._allocated_ports),
+            keys=["local", "resources", "allocated_ports"],
         )
 
     @staticmethod
@@ -113,7 +114,11 @@ class LocalConfig(Config):
         return config_obj
 
     def serialize(self) -> dict:
-        out = {"name": "local", "region": self._region, "resources": self._resources.serialize()}
+        out = {
+            "name": "local",
+            "region": self._region,
+            "resources": self._resources.serialize(),
+        }
         return out
 
     def update_cache(self, cache: Cache):

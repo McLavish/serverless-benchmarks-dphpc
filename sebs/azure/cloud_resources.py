@@ -35,7 +35,10 @@ class CosmosDBAccount:
 
     @staticmethod
     def from_allocation(
-        account_name: str, resource_group: str, cli_instance: AzureCLI, url: Optional[str]
+        account_name: str,
+        resource_group: str,
+        cli_instance: AzureCLI,
+        url: Optional[str],
     ) -> "CosmosDBAccount":
 
         if url is None:

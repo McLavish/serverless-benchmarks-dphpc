@@ -144,7 +144,8 @@ class ScyllaDB(NoSQLStorage):
             if platform.system() == "Linux" and "microsoft" not in platform.release().lower():
                 networks = self._storage_container.attrs["NetworkSettings"]["Networks"]
                 self._cfg.address = "{IPAddress}:{Port}".format(
-                    IPAddress=networks["bridge"]["IPAddress"], Port=self._cfg.alternator_port
+                    IPAddress=networks["bridge"]["IPAddress"],
+                    Port=self._cfg.alternator_port,
                 )
             else:
                 # System is either WSL, Windows, or Mac
@@ -169,7 +170,10 @@ class ScyllaDB(NoSQLStorage):
             self.logging.error("Stopping ScyllaDB was not succesful, storage container not known!")
 
     def envs(self) -> dict:
-        return {"NOSQL_STORAGE_TYPE": "scylladb", "NOSQL_STORAGE_ENDPOINT": self._cfg.address}
+        return {
+            "NOSQL_STORAGE_TYPE": "scylladb",
+            "NOSQL_STORAGE_ENDPOINT": self._cfg.address,
+        }
 
     def serialize(self) -> Tuple[StorageType, dict]:
         return StorageType.SCYLLADB, self._cfg.serialize()
@@ -186,7 +190,10 @@ class ScyllaDB(NoSQLStorage):
 
     @staticmethod
     def _deserialize(
-        cached_config: ScyllaDBConfig, cache_client: Cache, resources: Resources, obj_type: Type[T]
+        cached_config: ScyllaDBConfig,
+        cache_client: Cache,
+        resources: Resources,
+        obj_type: Type[T],
     ) -> T:
         docker_client = docker.from_env()
         obj = obj_type(docker_client, cache_client, cached_config, resources)
@@ -269,7 +276,11 @@ class ScyllaDB(NoSQLStorage):
     """
 
     def create_table(
-        self, benchmark: str, name: str, primary_key: str, secondary_key: Optional[str] = None
+        self,
+        benchmark: str,
+        name: str,
+        primary_key: str,
+        secondary_key: Optional[str] = None,
     ) -> str:
 
         table_name = f"sebs-benchmarks-{self._cloud_resources.resources_id}-{benchmark}-{name}"

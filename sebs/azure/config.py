@@ -20,7 +20,11 @@ class AzureCredentials(Credentials):
     _password: str
 
     def __init__(
-        self, appId: str, tenant: str, password: str, subscription_id: Optional[str] = None
+        self,
+        appId: str,
+        tenant: str,
+        password: str,
+        subscription_id: Optional[str] = None,
     ):
         super().__init__()
         self._appId = appId
