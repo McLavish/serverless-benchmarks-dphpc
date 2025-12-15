@@ -69,7 +69,9 @@ class Deployment(LoggingBase):
                 deployment._memory_measurement_pids = input_data["memory_measurements"]["pids"]
                 deployment._measurement_file = input_data["memory_measurements"]["file"]
             deployment._storage = Minio.deserialize(
-                MinioConfig.deserialize(input_data["storage"]), cache_client, LocalResources()
+                MinioConfig.deserialize(input_data["storage"]),
+                cache_client,
+                LocalResources(),
             )
             return deployment
 

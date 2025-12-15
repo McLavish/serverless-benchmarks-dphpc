@@ -181,7 +181,11 @@ class GCP(System):
         # rename the main.py back to handler.py
         shutil.move(new_path, old_path)
 
-        return os.path.join(directory, "{}.zip".format(benchmark)), bytes_size, container_uri
+        return (
+            os.path.join(directory, "{}.zip".format(benchmark)),
+            bytes_size,
+            container_uri,
+        )
 
     def create_function(
         self,
@@ -256,7 +260,10 @@ class GCP(System):
                     body={
                         "policy": {
                             "bindings": [
-                                {"role": "roles/cloudfunctions.invoker", "members": ["allUsers"]}
+                                {
+                                    "role": "roles/cloudfunctions.invoker",
+                                    "members": ["allUsers"],
+                                }
                             ]
                         }
                     },
@@ -538,7 +545,12 @@ class GCP(System):
         super().shutdown()
 
     def download_metrics(
-        self, function_name: str, start_time: int, end_time: int, requests: dict, metrics: dict
+        self,
+        function_name: str,
+        start_time: int,
+        end_time: int,
+        requests: dict,
+        metrics: dict,
     ):
 
         from google.api_core import exceptions

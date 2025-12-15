@@ -37,7 +37,11 @@ class PersistentStorage(ABC, LoggingBase):
         return self._region
 
     def __init__(
-        self, region: str, cache_client: Cache, resources: Resources, replace_existing: bool
+        self,
+        region: str,
+        cache_client: Cache,
+        resources: Resources,
+        replace_existing: bool,
     ):
         super().__init__()
         self._cache_client = cache_client
@@ -143,7 +147,6 @@ class PersistentStorage(ABC, LoggingBase):
     def benchmark_data(
         self, benchmark: str, requested_buckets: Tuple[int, int]
     ) -> Tuple[List[str], List[str]]:
-
         """
         Add an input path inside benchmarks bucket.
         Bucket name format: name-idx-input

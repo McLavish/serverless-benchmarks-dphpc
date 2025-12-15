@@ -36,7 +36,11 @@ class ECRContainer(DockerContainer):
         return self.ecr_client
 
     def registry_name(
-        self, benchmark: str, language_name: str, language_version: str, architecture: str
+        self,
+        benchmark: str,
+        language_name: str,
+        language_version: str,
+        architecture: str,
     ) -> Tuple[str, str, str, str]:
 
         account_id = self.config.credentials.account_id

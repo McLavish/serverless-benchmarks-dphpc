@@ -199,14 +199,18 @@ class SeBS(LoggingBase):
         return benchmark
 
     @staticmethod
-    def get_storage_implementation(storage_type: types.Storage) -> Type[PersistentStorage]:
+    def get_storage_implementation(
+        storage_type: types.Storage,
+    ) -> Type[PersistentStorage]:
         _storage_implementations = {types.Storage.MINIO: minio.Minio}
         impl = _storage_implementations.get(storage_type)
         assert impl
         return impl
 
     @staticmethod
-    def get_nosql_implementation(storage_type: types.NoSQLStorage) -> Type[NoSQLStorage]:
+    def get_nosql_implementation(
+        storage_type: types.NoSQLStorage,
+    ) -> Type[NoSQLStorage]:
         _storage_implementations = {types.NoSQLStorage.SCYLLADB: scylladb.ScyllaDB}
         impl = _storage_implementations.get(storage_type)
         assert impl

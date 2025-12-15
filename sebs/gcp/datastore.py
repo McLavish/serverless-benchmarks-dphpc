@@ -35,7 +35,11 @@ class Datastore(NoSQLStorage):
         return "gcp"
 
     def __init__(
-        self, cli_instance: GCloudCLI, cache_client: Cache, resources: Resources, region: str
+        self,
+        cli_instance: GCloudCLI,
+        cache_client: Cache,
+        resources: Resources,
+        region: str,
     ):
         super().__init__(region, cache_client, resources)
         self._cli_instance = cli_instance
@@ -76,7 +80,9 @@ class Datastore(NoSQLStorage):
     def update_cache(self, benchmark: str):
 
         self._cache_client.update_nosql(
-            self.deployment_name(), benchmark, self._benchmark_resources[benchmark].serialize()
+            self.deployment_name(),
+            benchmark,
+            self._benchmark_resources[benchmark].serialize(),
         )
 
     def benchmark_database(self, benchmark: str) -> str:

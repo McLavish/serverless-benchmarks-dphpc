@@ -103,7 +103,11 @@ class DynamoDB(NoSQLStorage):
     """
 
     def create_table(
-        self, benchmark: str, name: str, primary_key: str, secondary_key: Optional[str] = None
+        self,
+        benchmark: str,
+        name: str,
+        primary_key: str,
+        secondary_key: Optional[str] = None,
     ) -> str:
 
         table_name = f"sebs-benchmarks-{self._cloud_resources.resources_id}-{benchmark}-{name}"

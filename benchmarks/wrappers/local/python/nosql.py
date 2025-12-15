@@ -67,7 +67,10 @@ class nosql:
         self._get_table(table_name).put_item(Item=data)
 
     def get(
-        self, table_name: str, primary_key: Tuple[str, str], secondary_key: Tuple[str, str]
+        self,
+        table_name: str,
+        primary_key: Tuple[str, str],
+        secondary_key: Tuple[str, str],
     ) -> dict:
 
         data = {}
@@ -117,7 +120,12 @@ class nosql:
         )["Items"]
         return self._remove_decimals(res)
 
-    def delete(self, table_name: str, primary_key: Tuple[str, str], secondary_key: Tuple[str, str]):
+    def delete(
+        self,
+        table_name: str,
+        primary_key: Tuple[str, str],
+        secondary_key: Tuple[str, str],
+    ):
         data = {}
         for key in (primary_key, secondary_key):
             data[key[0]] = key[1]

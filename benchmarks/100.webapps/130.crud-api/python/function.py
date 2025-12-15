@@ -52,7 +52,11 @@ def handler(event):
 
         if route == "PUT /cart":
             add_product(
-                body["cart"], body["product_id"], body["name"], body["price"], body["quantity"]
+                body["cart"],
+                body["product_id"],
+                body["name"],
+                body["price"],
+                body["quantity"],
             )
             res = {}
         elif route == "GET /cart/{id}":

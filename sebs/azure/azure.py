@@ -85,7 +85,6 @@ class Azure(System):
         super().shutdown()
 
     def find_deployments(self) -> List[str]:
-
         """
         Look for duplicated resource groups.
         """
@@ -288,7 +287,8 @@ class Azure(System):
 
         if not found_trigger:
             trigger = HTTPTrigger(
-                function_url, self.config.resources.data_storage_account(self.cli_instance)
+                function_url,
+                self.config.resources.data_storage_account(self.cli_instance),
             )
             trigger.logging_handlers = self.logging_handlers
             function.add_trigger(trigger)

@@ -131,7 +131,12 @@ class AWS(System):
         if container_deployment:
             # build base image and upload to ECR
             _, container_uri = self.ecr_client.build_base_image(
-                directory, language_name, language_version, architecture, benchmark, is_cached
+                directory,
+                language_name,
+                language_version,
+                architecture,
+                benchmark,
+                is_cached,
             )
 
         CONFIG_FILES = {
