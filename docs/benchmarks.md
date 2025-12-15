@@ -12,6 +12,7 @@
 | Inference      | 411.image-recognition    | Python    | x64 | Image recognition with ResNet and pytorch. |
 | Inference      | 412.language-bert    | Python    | x64 | Sentence classification with a compact BERT model served via ONNX Runtime. |
 | Inference      | 413.recommendation    | Python    | x64 | GPU DLRM-inspired recommender scoring implemented in PyTorch. |
+| Batchsize Experiments | 701.language-bert-batchsize | Python | x64 | GPU-enabled ONNX BERT inference that sweeps configurable batch sizes and reports latency/throughput metrics. |
 | Scientific      | 501.graph-pagerank    | Python    | x64, arm64 | PageRank implementation with igraph. |
 | Scientific      | 502.graph-mst    | Python    | x64, arm64 | Minimum spanning tree (MST)  implementation with igraph. |
 | Scientific      | 503.graph-bfs    | Python    | x64, arm64 | Breadth-first search (BFS) implementation with igraph. |
@@ -79,6 +80,12 @@ This benchmark runs sequence classification with a compact BERT model exported t
 ### Recommendation
 
 Inspired by MLPerf’s DLRM v2, this benchmark ships a tiny PyTorch DLRM model that optionally runs on CUDA when available. The function downloads the model and request batch, moves the network to GPU if possible, performs batched inference, and reports recommendation scores alongside timing measurements.
+
+## Batchsize Experiments
+
+### Language Batchsize Profiler
+
+This experiment extends the BERT language inference pipeline with CUDA-enabled ONNX Runtime to sweep multiple batch sizes during a single invocation. It reuses the tiny BERT model and text corpus, but repeatedly runs inference with configurable warmup passes and repetitions per batch size, recording per-batch latency, throughput, and sample predictions so the resulting traces can be correlated with GPU utilization measurements gathered on the platform.
 
 ## Scientific
 
