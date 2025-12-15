@@ -77,7 +77,9 @@ class CosmosDB(NoSQLStorage):
     def update_cache(self, benchmark: str):
 
         self.cache_client.update_nosql(
-            self.deployment_name(), benchmark, self._benchmark_resources[benchmark].serialize()
+            self.deployment_name(),
+            benchmark,
+            self._benchmark_resources[benchmark].serialize(),
         )
 
     def cosmos_client(self) -> CosmosClient:
@@ -89,7 +91,8 @@ class CosmosDB(NoSQLStorage):
             )
 
             self._cosmos_client = CosmosClient(
-                url=self._cosmosdb_account.url, credential=self._cosmosdb_account.credential
+                url=self._cosmosdb_account.url,
+                credential=self._cosmosdb_account.credential,
             )
 
         return self._cosmos_client

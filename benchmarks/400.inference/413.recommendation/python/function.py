@@ -89,7 +89,9 @@ def _prepare_batch(requests):
         [req["category_id"] for req in requests], dtype=torch.long, device=_device
     )
     dense = torch.tensor(
-        [req.get("dense", [0.0, 0.0]) for req in requests], dtype=torch.float32, device=_device
+        [req.get("dense", [0.0, 0.0]) for req in requests],
+        dtype=torch.float32,
+        device=_device,
     )
     return user_ids, item_ids, category_ids, dense
 

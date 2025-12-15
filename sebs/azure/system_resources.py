@@ -56,7 +56,7 @@ class AzureSystemResources(SystemResources):
                 self._cache_client,
                 self.config.resources,
                 self.config.resources.data_storage_account(self.cli_instance).connection_string,
-                replace_existing=replace_existing if replace_existing is not None else False,
+                replace_existing=(replace_existing if replace_existing is not None else False),
             )
             self._storage.logging_handlers = self.logging_handlers
         elif replace_existing is not None:
@@ -66,7 +66,10 @@ class AzureSystemResources(SystemResources):
     def get_nosql_storage(self) -> CosmosDB:
         if self._nosql_storage is None:
             self._nosql_storage = CosmosDB(
-                self.cli_instance, self._cache_client, self.config.resources, self.config.region
+                self.cli_instance,
+                self._cache_client,
+                self.config.resources,
+                self.config.region,
             )
         return self._nosql_storage
 

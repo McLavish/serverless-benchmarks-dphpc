@@ -98,7 +98,10 @@ class DockerContainer(LoggingBase):
 
                     self.logging.info(f"Pushing image {image_tag} to {repository_uri}")
                     ret = self.docker_client.images.push(
-                        repository=repository_uri, tag=image_tag, stream=True, decode=True
+                        repository=repository_uri,
+                        tag=image_tag,
+                        stream=True,
+                        decode=True,
                     )
                     for line in ret:
                         self.show_progress(line, progress, layer_tasks)
@@ -122,7 +125,11 @@ class DockerContainer(LoggingBase):
 
     @abstractmethod
     def registry_name(
-        self, benchmark: str, language_name: str, language_version: str, architecture: str
+        self,
+        benchmark: str,
+        language_name: str,
+        language_version: str,
+        architecture: str,
     ) -> Tuple[str, str, str, str]:
         pass
 

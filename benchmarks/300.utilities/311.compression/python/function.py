@@ -39,7 +39,9 @@ def handler(event):
     archive_name = "{}.zip".format(key)
     archive_size = os.path.getsize(os.path.join(download_path, archive_name))
     key_name = client.upload(
-        bucket, os.path.join(output_prefix, archive_name), os.path.join(download_path, archive_name)
+        bucket,
+        os.path.join(output_prefix, archive_name),
+        os.path.join(download_path, archive_name),
     )
     s3_upload_stop = datetime.datetime.now()
 
