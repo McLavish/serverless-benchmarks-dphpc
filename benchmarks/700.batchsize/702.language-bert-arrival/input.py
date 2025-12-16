@@ -6,7 +6,7 @@ SIZE_PROFILES = {
     "test": {
         "arrival_rate_rps": 8,
         "simulation_duration_s": 3,
-        "latency_budget_ms": 100,
+        "latency_budget_ms": 1200,
         "max_batch_size": 8,
         "warmup_runs": 1,
         "report_samples": 2,
@@ -14,7 +14,7 @@ SIZE_PROFILES = {
     "small": {
         "arrival_rate_rps": 16,
         "simulation_duration_s": 6,
-        "latency_budget_ms": 200,
+        "latency_budget_ms": 2400,
         "max_batch_size": 16,
         "warmup_runs": 2,
         "report_samples": 4,
@@ -22,7 +22,7 @@ SIZE_PROFILES = {
     "large": {
         "arrival_rate_rps": 24,
         "simulation_duration_s": 10,
-        "latency_budget_ms": 300,
+        "latency_budget_ms": 3600,
         "max_batch_size": 32,
         "warmup_runs": 3,
         "report_samples": 6,
