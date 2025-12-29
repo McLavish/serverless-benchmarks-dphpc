@@ -302,7 +302,7 @@ def run_channel_flow(invoke: Callable[[Dict[str, Any]], Dict[str, Any]]):
 # -------- interact with SeBS  --------
 
 
-def run_all(invokers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]], out_dir: str = "."):
+def run_all(out_dir: str = "."):
     """
     invokers: dict
       key: benchmark
@@ -316,6 +316,14 @@ def run_all(invokers: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]], out
     OUTPUT_DIR = Path(out_dir)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # invoker
+    invokers = {
+        "host-device-copy": make_invoker("host-device-copy"),
+        "vector-add": make_invoker("vector-add"),
+        "compute": make_invoker("compute"),
+        "channel-flow": make_invoker("channel-flow"),
+    }
+    
     # host-device-copy
     if "host-device-copy" in invokers:
         print("\n=== host-device-copy (app-level) ===")

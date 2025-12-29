@@ -747,13 +747,6 @@ def experiment_gpu_app_metrics(runs, output_subdir, **kwargs):
 
         return _invoke
 
-    # invoker
-    invokers = {
-        "host-device-copy": make_invoker("host-device-copy"),
-        "vector-add": make_invoker("vector-add"),
-        "compute": make_invoker("compute"),
-        "channel-flow": make_invoker("channel-flow"),
-    }
 
     # output_dir
     plots_dir = os.path.join(output_dir, output_subdir)
@@ -763,7 +756,7 @@ def experiment_gpu_app_metrics(runs, output_subdir, **kwargs):
     old_cwd = os.getcwd()
     os.chdir(plots_dir)
     try:
-        gpu_app_metrics.run_all(invokers, out_dir=".")
+        gpu_app_metrics.run_all(out_dir=".")
     finally:
         os.chdir(old_cwd)
 
