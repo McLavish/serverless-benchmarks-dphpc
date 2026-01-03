@@ -11,11 +11,43 @@ SIZE_PROFILES = {
         "warmup_runs": 1,
         "report_samples": 2,
     },
-    "small": {
-        "arrival_rate_rps": 16,
-        "simulation_duration_s": 6,
-        "latency_budget_ms": 2400,
-        "max_batch_size": 16,
+    "lat_bg_50": {
+        "arrival_rate_rps": 25, # max batch size / latency budget
+        "simulation_duration_s": 6, # how long the poisson generator keeps producing arrivals
+        "latency_budget_ms": 50,
+        "max_batch_size": 32,
+        "warmup_runs": 2,
+        "report_samples": 4,
+    },
+    "lat_bg_100": {
+        "arrival_rate_rps": 25, 
+        "simulation_duration_s": 6, 
+        "latency_budget_ms": 100,
+        "max_batch_size": 32,
+        "warmup_runs": 2,
+        "report_samples": 4,
+    },
+    "lat_bg_300": {
+        "arrival_rate_rps": 25, 
+        "simulation_duration_s": 6, 
+        "latency_budget_ms": 300,
+        "max_batch_size": 32,
+        "warmup_runs": 2,
+        "report_samples": 4,
+    },
+    "lat_bg_600": {
+        "arrival_rate_rps": 25, 
+        "simulation_duration_s": 6, 
+        "latency_budget_ms": 600,
+        "max_batch_size": 32,
+        "warmup_runs": 2,
+        "report_samples": 4,
+    },
+    "lat_bg_1200": {
+        "arrival_rate_rps": 25, 
+        "simulation_duration_s": 6, 
+        "latency_budget_ms": 1200,
+        "max_batch_size": 32,
         "warmup_runs": 2,
         "report_samples": 4,
     },
