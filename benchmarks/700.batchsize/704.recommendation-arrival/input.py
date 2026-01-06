@@ -12,10 +12,10 @@ SIZE_PROFILES = {
         "report_samples": 2,
     },
     "small": {
-        "arrival_rate_rps": 25,
+        "arrival_rate_rps": 60,
         "simulation_duration_s": 6,
         "latency_budget_ms": 50,    # 50, 100, 200, 400, 800, 1200
-        "max_batch_size": 32,
+        "max_batch_size": 64,
         "warmup_runs": 2,
         "report_samples": 4,
     },
