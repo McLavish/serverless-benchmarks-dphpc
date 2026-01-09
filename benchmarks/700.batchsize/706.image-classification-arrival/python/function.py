@@ -1,6 +1,7 @@
 import datetime
 import json
 import math
+import numbers
 import os
 import random
 import shutil
@@ -40,13 +41,14 @@ _session: Optional[ort.InferenceSession] = None
 _session_input: Optional[str] = None
 _session_output: Optional[str] = None
 _cached_model_key: Optional[str] = None
+_session_batch_size: Optional[int] = None
 
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 def _ensure_model(bucket: str, model_prefix: str, model_key: Optional[str]) -> Tuple[float, float]:
-    global _session, _session_input, _session_output, _cached_model_key
+    global _session, _session_input, _session_output, _cached_model_key, _session_batch_size
 
     effective_model_key = model_key or MODEL_ARCHIVE
     model_download_begin = datetime.datetime.now()
@@ -78,10 +80,13 @@ def _ensure_model(bucket: str, model_prefix: str, model_key: Optional[str]) -> T
         _session_input = _session.get_inputs()[0].name
         _session_output = _session.get_outputs()[0].name
         _cached_model_key = effective_model_key
+        _session_batch_size = _infer_fixed_batch_size()
         model_process_end = datetime.datetime.now()
     else:
         model_process_begin = datetime.datetime.now()
         model_process_end = model_process_begin
+        if _session_batch_size is None:
+            _session_batch_size = _infer_fixed_batch_size()
 
     model_download_time = (model_download_end - model_download_begin) / datetime.timedelta(
         microseconds=1
@@ -122,6 +127,38 @@ def _prepare_tensor(image_path: str) -> np.ndarray:
     np_image = (np_image - _MEAN) / _STD
     np_image = np.transpose(np_image, (2, 0, 1))
     return np_image
+
+
+def _infer_fixed_batch_size() -> Optional[int]:
+    if _session is None:
+        return None
+    inputs = _session.get_inputs()
+    if not inputs:
+        return None
+    shape = inputs[0].shape
+    if not shape:
+        return None
+    batch_dim = shape[0]
+    if isinstance(batch_dim, numbers.Integral):
+        batch_size = int(batch_dim)
+        return batch_size if batch_size > 0 else None
+    return None
+
+
+def _pad_batch(
+    tensors: List[np.ndarray], fixed_batch_size: Optional[int]
+) -> Tuple[np.ndarray, int]:
+    batch_size = len(tensors)
+    if fixed_batch_size is None or fixed_batch_size <= 0:
+        return np.stack(tensors, axis=0), batch_size
+    if batch_size > fixed_batch_size:
+        raise ValueError(
+            f"Batch size {batch_size} exceeds fixed model batch size {fixed_batch_size}."
+        )
+    if batch_size < fixed_batch_size:
+        pad_tensor = tensors[-1]
+        tensors = tensors + [pad_tensor] * (fixed_batch_size - batch_size)
+    return np.stack(tensors, axis=0), batch_size
 
 
 def _load_images_list(entries: Sequence[Sequence[str]], shuffle: bool, seed: int) -> List[Tuple[str, str]]:
@@ -257,6 +294,7 @@ def _run_warmup(
     batch_cap: int,
     bucket: str,
     prefix: str,
+    fixed_batch_size: Optional[int],
 ) -> Tuple[float, float]:
     if runs <= 0:
         return 0.0, 0.0
@@ -269,7 +307,7 @@ def _run_warmup(
         tensor, dl = _tensor_for_entry(entries, idx, bucket, prefix)
         tensors.append(tensor)
         download_time += dl
-    batch = np.stack(tensors, axis=0)
+    batch, _ = _pad_batch(tensors, fixed_batch_size)
     total = 0.0
     for _ in range(runs):
         latency, _ = _timed_inference(batch)
@@ -285,6 +323,7 @@ def _simulate_batches(
     max_batch_size: int,
     latency_budget_us: Optional[int],
     report_samples: int,
+    fixed_batch_size: Optional[int],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], List[Dict[str, Any]], float]:
     if max_batch_size <= 0:
         raise ValueError("max_batch_size must be positive")
@@ -349,7 +388,7 @@ def _simulate_batches(
         batch_requests = [queue.pop(0) for _ in range(batch_size)]
         start_time = max(current_time, batch_requests[-1]["arrival_time"])
         tensors = [req["tensor"] for req in batch_requests]
-        batch = np.stack(tensors, axis=0)
+        batch, actual_size = _pad_batch(tensors, fixed_batch_size)
         latency, logits = _timed_inference(batch)
         batched_compute_time += latency
         finish_time = start_time + latency
@@ -359,7 +398,7 @@ def _simulate_batches(
         request_waits.extend(waits)
         response_times.extend(responses)
 
-        predictions = _format_predictions(logits)
+        predictions = _format_predictions(logits[:actual_size])
         if report_samples > 0 and len(sample_predictions) < report_samples:
             remaining = report_samples - len(sample_predictions)
             sample_predictions.extend(predictions[:remaining])
@@ -423,17 +462,17 @@ def handler(event):
     arrivals_us = _generate_arrivals(arrival_rate, duration_s, max_requests, seed)
 
     max_batch_size = int(experiment_cfg.get("max_batch_size", DEFAULT_EXPERIMENT["max_batch_size"]))
+    fixed_batch_size = _session_batch_size
+    if fixed_batch_size is not None:
+        max_batch_size = min(max_batch_size, fixed_batch_size)
     latency_budget_ms = experiment_cfg.get(
         "latency_budget_ms", DEFAULT_EXPERIMENT["latency_budget_ms"]
     )
     latency_budget_us = int(latency_budget_ms * 1000) if latency_budget_ms else None
 
     warmup_runs = int(experiment_cfg.get("warmup_runs", DEFAULT_EXPERIMENT["warmup_runs"]))
-    warmup_tensors = [
-        _prepare_tensor(_download_image(bucket, images_prefix, img)) for img, _ in image_entries[:max_batch_size]
-    ]
     warmup_time, warmup_download_time = _run_warmup(
-        image_entries, warmup_runs, max_batch_size, bucket, images_prefix
+        image_entries, warmup_runs, max_batch_size, bucket, images_prefix, fixed_batch_size
     )
 
     report_samples = int(experiment_cfg.get("report_samples", DEFAULT_EXPERIMENT["report_samples"]))
@@ -446,7 +485,14 @@ def handler(event):
         batched_compute_time,
         batch_download_time,
     ) = _simulate_batches(
-        image_entries, bucket, images_prefix, arrivals_us, max_batch_size, latency_budget_us, report_samples
+        image_entries,
+        bucket,
+        images_prefix,
+        arrivals_us,
+        max_batch_size,
+        latency_budget_us,
+        report_samples,
+        fixed_batch_size,
     )
     profiling_end = datetime.datetime.now()
 

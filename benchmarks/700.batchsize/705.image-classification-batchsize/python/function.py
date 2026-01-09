@@ -1,5 +1,6 @@
 import datetime
 import json
+import numbers
 import os
 import random
 import shutil
@@ -37,13 +38,14 @@ _session: Optional[ort.InferenceSession] = None
 _session_input: Optional[str] = None
 _session_output: Optional[str] = None
 _cached_model_key: Optional[str] = None
+_session_batch_size: Optional[int] = None
 
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 def _ensure_model(bucket: str, model_prefix: str, model_key: Optional[str]) -> Tuple[float, float]:
-    global _session, _session_input, _session_output, _cached_model_key
+    global _session, _session_input, _session_output, _cached_model_key, _session_batch_size
 
     effective_model_key = model_key or MODEL_ARCHIVE
     model_download_begin = datetime.datetime.now()
@@ -75,10 +77,13 @@ def _ensure_model(bucket: str, model_prefix: str, model_key: Optional[str]) -> T
         _session_input = _session.get_inputs()[0].name
         _session_output = _session.get_outputs()[0].name
         _cached_model_key = effective_model_key
+        _session_batch_size = _infer_fixed_batch_size()
         model_process_end = datetime.datetime.now()
     else:
         model_process_begin = datetime.datetime.now()
         model_process_end = model_process_begin
+        if _session_batch_size is None:
+            _session_batch_size = _infer_fixed_batch_size()
 
     model_download_time = (model_download_end - model_download_begin) / datetime.timedelta(
         microseconds=1
@@ -119,6 +124,37 @@ def _prepare_tensor(image_path: str) -> np.ndarray:
     np_image = (np_image - _MEAN) / _STD
     np_image = np.transpose(np_image, (2, 0, 1))
     return np_image
+
+
+def _infer_fixed_batch_size() -> Optional[int]:
+    if _session is None:
+        return None
+    inputs = _session.get_inputs()
+    if not inputs:
+        return None
+    shape = inputs[0].shape
+    if not shape:
+        return None
+    batch_dim = shape[0]
+    if isinstance(batch_dim, numbers.Integral):
+        batch_size = int(batch_dim)
+        return batch_size if batch_size > 0 else None
+    return None
+
+
+def _pad_batch(batch: np.ndarray, fixed_batch_size: Optional[int]) -> Tuple[np.ndarray, int]:
+    batch_size = batch.shape[0]
+    if fixed_batch_size is None or fixed_batch_size <= 0:
+        return batch, batch_size
+    if batch_size > fixed_batch_size:
+        raise ValueError(
+            f"Batch size {batch_size} exceeds fixed model batch size {fixed_batch_size}."
+        )
+    if batch_size < fixed_batch_size:
+        pad_count = fixed_batch_size - batch_size
+        pad = np.repeat(batch[-1:], pad_count, axis=0)
+        batch = np.concatenate([batch, pad], axis=0)
+    return batch, batch_size
 
 
 def _load_images(
@@ -200,10 +236,12 @@ def _profile_batch_size(
     warmup_runs: int,
     repetitions: int,
     report_predictions: int,
+    fixed_batch_size: Optional[int],
 ) -> Tuple[Dict[str, Any], float]:
     warmup = max(0, int(warmup_runs))
     for i in range(warmup):
-        _timed_inference(batches[i % len(batches)])
+        warmup_batch, _ = _pad_batch(batches[i % len(batches)], fixed_batch_size)
+        _timed_inference(warmup_batch)
 
     timings = []
     total_batches = 0
@@ -211,11 +249,14 @@ def _profile_batch_size(
     reps = max(1, int(repetitions))
     for _ in range(reps):
         for chunk in batches:
-            latency, logits = _timed_inference(chunk)
+            padded, actual_size = _pad_batch(chunk, fixed_batch_size)
+            latency, logits = _timed_inference(padded)
             timings.append(latency)
             total_batches += 1
             if sample_predictions is None and report_predictions > 0:
-                sample_predictions = _format_predictions(chunk, logits)[:report_predictions]
+                sample_predictions = _format_predictions(
+                    chunk[:actual_size], logits[:actual_size]
+                )[:report_predictions]
 
     total_latency = float(sum(timings))
     samples_processed = total_batches * batch_size
@@ -267,6 +308,16 @@ def handler(event):
     if not batch_sizes:
         raise ValueError("At least one batch size must be provided.")
     batch_sizes = [int(size) for size in batch_sizes]
+    fixed_batch_size = _session_batch_size
+    if fixed_batch_size is not None:
+        capped_sizes = []
+        seen = set()
+        for size in batch_sizes:
+            capped = min(size, fixed_batch_size)
+            if capped not in seen:
+                capped_sizes.append(capped)
+                seen.add(capped)
+        batch_sizes = capped_sizes
 
     warmup_runs = int(experiment_cfg.get("warmup_runs", DEFAULT_EXPERIMENT["warmup_runs"]))
     repetitions = int(experiment_cfg.get("repetitions", DEFAULT_EXPERIMENT["repetitions"]))
@@ -280,7 +331,7 @@ def handler(event):
     for batch_size in batch_sizes:
         batches = _batch_arrays(tensors, batch_size)
         profile, latency = _profile_batch_size(
-            batches, batch_size, warmup_runs, repetitions, report_predictions
+            batches, batch_size, warmup_runs, repetitions, report_predictions, fixed_batch_size
         )
         profiles.append(profile)
         total_latency += latency

@@ -4,10 +4,10 @@ import os
 
 SIZE_PROFILES = {
     "test": {
-        "arrival_rate_rps": 8,
+        "arrival_rate_rps": 36,
         "simulation_duration_s": 3,
-        "latency_budget_ms": 500,
-        "max_batch_size": 8,
+        "latency_budget_ms": 800,
+        "max_batch_size": 32,
         "warmup_runs": 1,
         "report_samples": 2,
     },
